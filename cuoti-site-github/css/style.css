@@ -799,3 +799,9 @@ math-field.mathfield::part(menu-toggle) { display: none; }
 }
 .mathfield .mf-input::placeholder { font-style: normal; font-size: 15px; color: #98a2b3; }
 .mathfield:not(:focus-within) .mf-render { font-size: 20px; }
+/* 公式框编辑态控制（覆盖前面的 :focus-within 规则） */
+.mathfield .mf-render { display: block !important; }
+.mathfield .mf-input { display: none !important; }
+.mathfield.editing .mf-render { display: none !important; }
+.mathfield.editing .mf-input { display: block !important; }
+.mathfield .mf-choices { display: flex !important; }

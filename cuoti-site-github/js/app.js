@@ -1088,6 +1088,24 @@
     return smartLatex(raw);
   }
 
+  function enterMathEditing(field) {
+    if (!field) return;
+    field.classList.add('editing');
+    var input = field.querySelector('.mf-input');
+    if (input) {
+      input.style.display = 'block';
+      setTimeout(function () { try { input.focus(); } catch (e) {} }, 20);
+    }
+  }
+
+  function leaveMathEditing(field) {
+    if (!field) return;
+    field.classList.remove('editing');
+    var input = field.querySelector('.mf-input');
+    if (input) input.style.display = '';
+    updateMathFieldRender(field);
+  }
+
   function updateMathFieldRender(field) {
     if (!field) return;
     var input = field.querySelector('.mf-input');
@@ -1194,6 +1212,7 @@
     nr.setStart(srcEl || field, 0); nr.collapse(true);
     if (sel) { sel.removeAllRanges(); sel.addRange(nr); }
     if (srcEl) { try { srcEl.focus(); } catch (e) {} }
+    enterMathEditing(field);
     showFormulaDock();
     updateMathFieldRender(field);
     return true;
@@ -1228,6 +1247,7 @@
     nr.setStart(srcEl2 || field, 0); nr.collapse(true);
     if (sel) { sel.removeAllRanges(); sel.addRange(nr); }
     if (srcEl2) srcEl2.focus();
+    enterMathEditing(field);
     return true;
   }
 
@@ -3854,9 +3874,29 @@
     // 公式框失焦后按数学字体重排
     document.addEventListener('focusout', function (e) {
       var t = e.target;
+      if (t && t.classList && t.classList.contains('mf-input')) {
+        var fld = t.closest('.mathfield');
+        if (fld) {
+          setTimeout(function () {
+            if (document.activeElement && fld.contains(document.activeElement)) return;
+            leaveMathEditing(fld);
+          }, 120);
+        }
+        return;
+      }
       if (t && t.classList && t.classList.contains('mathfield')) {
         setTimeout(function () { restyleMathField(t); }, 50);
       }
+    });
+
+    // 点公式框 → 进入编辑态（显示输入框并聚焦）
+    document.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      if (t.closest('.mf-choices') || t.closest('.mf-input')) return;
+      var field = t.closest('.mathfield');
+      if (!field) return;
+      enterMathEditing(field);
     });
 
     // 点富文本里的公式块 → 修改
