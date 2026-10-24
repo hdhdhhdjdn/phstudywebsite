@@ -1146,7 +1146,9 @@
       return DataStore.put('items', it);
     }).then(function (saved) {
       if (saved && saved.id) it = saved; // 云端会补上 ownerId / ownerName
-      return saveProgress(it.id, { status: $('#e-status').value || 'new' });
+      var __st = $('#e-status').value || 'new';
+      if (__st === 'new' && !statusOf(it.id)) return null;   // 默认"未掌握"时无需额外写入，避免覆盖刚保存的题目
+      return saveProgress(it.id, { status: __st });
     }).then(function () {
       state.items = state.items.filter(function (x) { return x.id !== it.id; });
       state.items.push(it);
