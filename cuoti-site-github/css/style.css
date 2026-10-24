@@ -734,3 +734,9 @@ body.has-dock { padding-bottom: 180px; }
 .mathfield .mfrac .fnum { border-bottom: 1px solid currentColor; padding: 0 3px; }
 .mathfield .mfrac .fden { padding: 0 3px; }
 .mathfield:empty:before { content: attr(data-ph); color: #98a2b3; font-style: normal; }
+/* MathLive 公式框 */
+math-field.mathfield { min-width: 150px; min-height: 38px; padding: 2px 8px; background: #f3f5f8; border: 1px solid #cfd8e3; border-radius: 6px; font-size: 18px; vertical-align: middle; margin: 0 3px; }
+math-field.mathfield:focus-within { background: #fff; border-color: #7aa7ff; box-shadow: 0 0 0 2px rgba(90,140,255,.18); }
+math-field.mathfield::part(virtual-keyboard-toggle) { display: none; }
+math-field.mathfield::part(menu-toggle) { display: none; }
+.mathfield .mf-render, .mathfield .mf-src { display: none; }

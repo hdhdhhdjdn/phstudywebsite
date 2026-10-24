@@ -840,6 +840,7 @@
 
   function activeMathField() {
     var ae = document.activeElement;
+    if (ae && ae.tagName === 'MATH-FIELD') return ae;
     if (ae && ae.classList && ae.classList.contains('mf-src')) return ae.closest('.mathfield');
     if (ae && ae.classList && ae.classList.contains('mathfield')) return ae;
     var sel = window.getSelection();
@@ -850,6 +851,9 @@
   }
 
   function dockInsertText(field, txt) {
+    if (field && field.tagName === 'MATH-FIELD') {
+      try { field.focus(); field.insert(txt); return; } catch (e) {}
+    }
     field.focus();
     var sel = window.getSelection();
     if (!sel || !sel.rangeCount || !field.contains(sel.getRangeAt(0).startContainer)) {
@@ -866,6 +870,11 @@
   }
 
   function dockInsertStruct(field, kind) {
+    if (field && field.tagName === 'MATH-FIELD') {
+      var cmds = { frac: 'insertFraction', sup: 'addSuperscript', sub: 'addSubscript', sqrt: 'insertSquareRoot', int: 'insertIntegral', sum: 'insertSum', lim: 'insertLimit', paren: 'insertLeftRight', matrix: 'insertMatrix' };
+      var cmd = cmds[kind] || 'insertFraction';
+      try { field.focus(); field.executeCommand(cmd); return; } catch (e) {}
+    }
     field.focus();
     var sel = window.getSelection();
     var r = (sel && sel.rangeCount && field.contains(sel.getRangeAt(0).startContainer)) ? sel.getRangeAt(0) : null;
@@ -895,14 +904,26 @@
     if (sel) { sel.removeAllRanges(); sel.addRange(nr); }
   }
 
+  var MATHLIVE_READY = false;
+  function initMathLive() {
+    if (MATHLIVE_READY) return;
+    if (typeof window.MathLive === 'undefined') return;
+    MATHLIVE_READY = true;
+    try {
+      window.MathLive.fontsDirectory = 'css/fonts/';
+      window.MathLive.platform = 'desktop';
+      if (window.mathVirtualKeyboard) window.mathVirtualKeyboard.layouts = ['numeric', 'symbols', 'alphabetic', 'greek'];
+    } catch (e) {}
+  }
+
   function makeMathField() {
-    var span = document.createElement('span');
-    span.className = 'mathfield';
-    span.setAttribute('contenteditable', 'true');
-    span.setAttribute('data-tex', '');
-    span.setAttribute('data-ph', '在此处键入公式。');
-    span.setAttribute('spellcheck', 'false');
-    return span;
+    initMathLive();
+    var mf = document.createElement('math-field');
+    mf.className = 'mathfield';
+    mf.setAttribute('virtual-keyboard-mode', 'manual');
+    mf.setAttribute('smart-fence', '');
+    mf.setAttribute('letter-shape-style', 'italic');
+    return mf;
   }
 
   // 把原始写法转成 LaTeX
@@ -1114,7 +1135,9 @@
     Array.prototype.slice.call(el.childNodes).forEach(function (node) {
       if (node.nodeType === 3) { out += node.nodeValue; return; }
       if (node.nodeType !== 1) return;
-      if (node.classList && node.classList.contains('mathfield')) {
+      if (node.tagName === 'MATH-FIELD') {
+        out += '$' + fieldTex(node) + '$';
+      } else if (node.classList && node.classList.contains('mathfield')) {
         out += '$' + fieldTex(node) + '$';
       } else if (node.classList && node.classList.contains('mathchip')) {
         out += '$' + (node.getAttribute('data-tex') || '') + '$';
@@ -3555,6 +3578,7 @@
       if (!t) return;
       if (t.classList && t.classList.contains('rich-answer')) { /* 富文本框内部处理 */ }
       if (t.tagName === 'TEXTAREA' && t.classList && t.classList.contains('inline-answer-text')) refreshAnswerPreview(t);
+      if (t && t.tagName === 'MATH-FIELD') return;
       if (t.classList && t.classList.contains('mathfield')) {
         updateMathFieldRender(t);
         return;
@@ -3575,6 +3599,7 @@
       if (e.key !== ' ' || e.isComposing) return;
       var t = e.target;
       if (!t || !t.classList) return;
+      if (t && t.tagName === 'MATH-FIELD') return;
       if (t.classList && t.classList.contains('mathfield')) {
         if (fieldConvertBeforeSpace(t)) e.preventDefault();
         return;
@@ -3594,7 +3619,19 @@
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Backspace') return;
       var t = e.target;
-      if (!t || !t.classList || !t.classList.contains('mathfield')) return;
+      if (!t) return;
+      if (t.tagName === 'MATH-FIELD') {
+        var mfv = '';
+        try { mfv = t.value || ''; } catch (e) {}
+        if (!String(mfv).trim()) {
+          e.preventDefault();
+          var richM = t.closest('.rich-answer');
+          if (t.parentNode) t.parentNode.removeChild(t);
+          if (richM) richM.focus();
+        }
+        return;
+      }
+      if (!t.classList || !t.classList.contains('mathfield')) return;
       var fld = t;
       if ((t.textContent || '').trim() === '') {
         e.preventDefault();
