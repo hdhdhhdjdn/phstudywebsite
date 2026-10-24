@@ -333,7 +333,7 @@
       var url = URL.createObjectURL(file);
       var img = new Image();
       img.onload = function () {
-        var max = 1800;
+        var max = 2400;
         var w = img.naturalWidth || 1200;
         var h = img.naturalHeight || 900;
         var scale = Math.min(1, max / Math.max(w, h));
@@ -1544,7 +1544,7 @@
         canvas.width = sw;
         canvas.height = sh;
         canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-        return new Promise(function (resolve) { canvas.toBlob(resolve, 'image/jpeg', 0.9); });
+        return new Promise(function (resolve) { canvas.toBlob(resolve, 'image/jpeg', 0.92); });
       }).then(function (blob) {
         var newId = uid();
         return DataStore.put('images', { id: newId, blob: blob, type: 'image/jpeg', name: '' }).then(function () {

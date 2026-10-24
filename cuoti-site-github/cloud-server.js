@@ -347,7 +347,7 @@ async function callTranscribeAPI(cfg, item) {
 
   const content = [{
     type: 'text',
-    text: '请识别图片中的题目，并以 JSON 返回：{"text":"题目文字","hasImage":true 或 false}\n' +
+    text: '图片是试卷照片，正文文字较小，请逐字仔细阅读（不要只读页眉和标题）——请识别图片中的题目，并以 JSON 返回：{"text":"题目文字","hasImage":true 或 false}\n' +
       'text 要求：\n' +
       '1. 保留题号、选项、单位、数字，不要遗漏\n' +
       '2. 所有数学公式用 $...$ 包裹的 LaTeX（如 $\\frac{1}{2}$、$x^2$、$\\sqrt{3}$、$H_2O$），普通文字不要放进 $...$\n' +
