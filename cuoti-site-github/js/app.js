@@ -1668,9 +1668,22 @@
     { l: '根号', v: '\\sqrt{}' },
     { l: '求导', v: '\\frac{dy}{dx}' },
     { l: '积分', v: '\\int_{}^{}\\,dx' },
-    { l: '联立方程', v: '\\begin{cases}  \\\\  \\end{cases}' }
+    { l: '联立方程', v: '\\begin{cases}  \\\\  \\end{cases}' },
+    { l: '°C', v: '^\\circ\\text{C}' },
+    { l: 'Δ', v: '\\Delta' }
   ];
   var FQ_TABS = [
+    { id: 'basic', label: '±×÷°C', keys: [
+      { l: '±', v: '\\pm' }, { l: '∓', v: '\\mp' }, { l: '+', v: '+' }, { l: '−', v: '-' }, { l: '×', v: '\\times' }, { l: '÷', v: '\\div' }, { l: '⋅', v: '\\cdot' }, { l: '*', v: '*' },
+      { l: '=', v: '=' }, { l: '≠', v: '\\neq' }, { l: '≈', v: '\\approx' }, { l: '≅', v: '\\cong' }, { l: '≡', v: '\\equiv' }, { l: '≃', v: '\\simeq' }, { l: '~', v: '\\sim' }, { l: '%', v: '\\%' },
+      { l: '∞', v: '\\infty' }, { l: '<', v: '<' }, { l: '>', v: '>' }, { l: '≤', v: '\\leq' }, { l: '≥', v: '\\geq' }, { l: '≪', v: '\\ll' }, { l: '≫', v: '\\gg' }, { l: '!', v: '!' },
+      { l: 'α', v: '\\alpha' }, { l: 'β', v: '\\beta' }, { l: 'γ', v: '\\gamma' }, { l: 'δ', v: '\\delta' }, { l: 'ε', v: '\\epsilon' }, { l: 'ϵ', v: '\\varepsilon' }, { l: 'θ', v: '\\theta' }, { l: 'ϑ', v: '\\vartheta' },
+      { l: 'μ', v: '\\mu' }, { l: 'π', v: '\\pi' }, { l: 'ρ', v: '\\rho' }, { l: 'σ', v: '\\sigma' }, { l: 'τ', v: '\\tau' }, { l: 'φ', v: '\\varphi' }, { l: 'ω', v: '\\omega' }, { l: '¬', v: '\\neg' },
+      { l: '∀', v: '\\forall' }, { l: '∃', v: '\\exists' }, { l: 'ℂ', v: '\\mathbb{C}' }, { l: 'ℵ', v: '\\aleph' }, { l: 'ℒ', v: '\\mathcal{L}' }, { l: '∅', v: '\\emptyset' }, { l: '∈', v: '\\in' }, { l: '∉', v: '\\notin' },
+      { l: '∋', v: '\\ni' }, { l: '∪', v: '\\cup' }, { l: '∩', v: '\\cap' }, { l: '∂', v: '\\partial' }, { l: '∇', v: '\\nabla' }, { l: '√', v: '\\sqrt{}' }, { l: '∛', v: '\\sqrt[3]{}' }, { l: '∜', v: '\\sqrt[4]{}' },
+      { l: '°', v: '^\\circ' }, { l: '°C', v: '^\\circ\\text{C}' }, { l: '°F', v: '^\\circ\\text{F}' }, { l: 'Δ', v: '\\Delta' }, { l: '∴', v: '\\therefore' }, { l: '∵', v: '\\because' }, { l: '∷', v: '::' }, { l: '…', v: '\\ldots' },
+      { l: '→', v: '\\rightarrow' }, { l: '←', v: '\\leftarrow' }, { l: '↑', v: '\\uparrow' }, { l: '↓', v: '\\downarrow' }, { l: '↔', v: '\\leftrightarrow' }, { l: '⇒', v: '\\Rightarrow' }, { l: '⇔', v: '\\Leftrightarrow' }, { l: '■', v: '\\blacksquare' }
+    ] },
     { id: 'num', label: '123', keys: [
       { l: 'x', v: 'x' }, { l: 'n', v: 'n', hint: 'a' }, { l: '7', v: '7' }, { l: '8', v: '8' }, { l: '9', v: '9' }, { l: '÷', v: '\\div' },
       { l: '<', v: '<' }, { l: '>', v: '>' }, { l: '4', v: '4' }, { l: '5', v: '5' }, { l: '6', v: '6' }, { l: '×', v: '\\times' },
