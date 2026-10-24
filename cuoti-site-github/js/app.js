@@ -3801,6 +3801,10 @@
     document.addEventListener('click', function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
+      var catBtn = t.closest('[data-dock-cat]');
+      if (catBtn) { DOCK_ACTIVE = catBtn.getAttribute('data-dock-cat'); renderFormulaDock(); return; }
+      var closeBtn = t.closest('[data-dock-close]');
+      if (closeBtn) { hideFormulaDock(); return; }
       var keyBtn = t.closest('[data-dock-key]');
       if (keyBtn) {
         var field = activeMathField();
