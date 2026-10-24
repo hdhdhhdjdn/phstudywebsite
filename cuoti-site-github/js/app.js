@@ -735,6 +735,72 @@
     return out.map(function (x) { return { label: x.label, body: String(x.body || '').trim() }; });
   }
 
+  // ---------- 答案公式预览（可点击编辑） ----------
+  var MATH_TOKEN_RE = /(\$[^$\n]+\$)|([A-Za-z0-9)\]]\s*\^\s*(?:\{[^}\n]+\}|[A-Za-z0-9+\-]+))|([A-Za-z0-9)\]]\s*_\s*(?:\{[^}\n]+\}|[A-Za-z0-9]+))|((?<![A-Za-z0-9/])(?:[A-Za-z]\d*|\d+[A-Za-z]?)\s*\/\s*(?:[A-Za-z]\d*|\d+)(?![A-Za-z0-9/]))/g;
+
+  function mathPreviewHTML(raw) {
+    var txt = String(raw || '');
+    var out = '';
+    var last = 0;
+    var m;
+    MATH_TOKEN_RE.lastIndex = 0;
+    while ((m = MATH_TOKEN_RE.exec(txt)) !== null) {
+      if (m.index > last) out += esc(txt.slice(last, m.index));
+      var token = m[0];
+      var rendered;
+      try { rendered = renderMathText(token); } catch (e) { rendered = esc(token); }
+      out += '<span class="mtok" data-action="edit-mtoken" data-raw="' + encodeURIComponent(token) + '" title="点击编辑">' + rendered + '</span>';
+      last = m.index + token.length;
+    }
+    if (last < txt.length) out += esc(txt.slice(last));
+    return out;
+  }
+
+  function refreshAnswerPreview(ta) {
+    if (!ta) return;
+    var host = ta.parentNode;
+    if (!host) return;
+    var box = host.querySelector('.answer-preview');
+    if (!box) return;
+    var val = String(ta.value || '').trim();
+    if (!val) { box.innerHTML = '<span class="muted">公式会实时显示在这里，点公式可修改</span>'; return; }
+    box.innerHTML = mathPreviewHTML(val);
+  }
+
+  function refreshAllAnswerPreviews() {
+    $$('.inline-answer-text').forEach(function (ta) { refreshAnswerPreview(ta); });
+  }
+
+  function openMathTokenEditor(raw, ta) {
+    state.mtokenCtx = { ta: ta, raw: String(raw || '') };
+    var input = $('#mtoken-input');
+    if (input) input.value = String(raw || '');
+    var prev = $('#mtoken-preview');
+    if (prev) {
+      try { prev.innerHTML = renderMathText(String(raw || '')); } catch (e) { prev.textContent = raw; }
+    }
+    showModal('modal-math-token');
+    if (input) setTimeout(function () { input.focus(); input.select(); }, 60);
+  }
+
+  function saveMathToken() {
+    var ctx = state.mtokenCtx;
+    var input = $('#mtoken-input');
+    if (!ctx || !input) return;
+    var next = input.value;
+    var ta = ctx.ta;
+    if (ta) {
+      var val = String(ta.value || '');
+      var at = val.indexOf(ctx.raw);
+      if (at < 0) at = val.indexOf(ctx.raw.trim());
+      if (at >= 0) ta.value = val.slice(0, at) + next + val.slice(at + ctx.raw.length);
+      else ta.value = val + next;
+      refreshAnswerPreview(ta);
+    }
+    closeModal('modal-math-token');
+    toast('公式已更新', 'ok');
+  }
+
   function partActionsHTML(it, label) {
     return '<div class="part-actions">' +
       '<label class="btn tiny">📷 手写/绘图<input type="file" class="part-file" accept="image/*" multiple data-id="' + esc(it.id) + '" data-part="' + esc(label) + '" hidden></label>' +
@@ -889,6 +955,7 @@
           return '<div class="q-part">' +
             '<div class="q-text q-text-sub">(' + esc(p.label) + ') ' + renderMathText(p.body) + '</div>' +
             '<textarea class="inline-answer-text" rows="2" data-part="' + esc(p.label) + '" placeholder="第 (' + esc(p.label) + ') 小题的答案 / 过程"></textarea>' +
+            '<div class="answer-preview"></div>' +
             partActionsHTML(it, p.label) +
             partResultHTML(it, p.label) +
           '</div>';
@@ -1014,6 +1081,7 @@
     }
     box.innerHTML = state.groupMode ? groupedHTML(list) : list.map(itemCardHTML).join('');
     hydrateImages(box);
+    refreshAllAnswerPreviews();
   }
 
   function toggleMastered(id) {
@@ -1062,6 +1130,7 @@
   }
 
   function showModal(id) { $('#' + id).classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+  function closeModal(id) { var el = $('#' + id); if (el) el.classList.add('hidden'); document.body.style.overflow = ''; }
   function hideModal(id) { $('#' + id).classList.add('hidden'); document.body.style.overflow = ''; }
 
   function openEditor(id) {
@@ -2805,6 +2874,14 @@
       if (action === 'new-item') { openEditor(null); return; }
       if (action === 'edit-item') { openEditor(id); return; }
       if (action === 'delete-item') { deleteItem(id); return; }
+      if (action === 'edit-mtoken') {
+        var rawTok = decodeURIComponent(el.getAttribute('data-raw') || '');
+        var hostTa = el.closest('.q-part') ? el.closest('.q-part').querySelector('textarea') : null;
+        openMathTokenEditor(rawTok, hostTa);
+        return;
+      }
+      if (action === 'close-math-token') { closeModal('modal-math-token'); return; }
+      if (action === 'save-math-token') { saveMathToken(); return; }
       if (action === 'toggle-card') {
         state.expanded = state.expanded || {};
         var cardEl = el.closest('article.item-card');
@@ -2948,6 +3025,17 @@
         if (!confirm('退出登录？')) return;
         Cloud.logout().then(function () { location.href = 'login.html'; });
         return;
+      }
+    });
+
+    // 答案公式预览：输入时实时刷新；点公式片段可编辑
+    document.addEventListener('input', function (e) {
+      var t = e.target;
+      if (!t) return;
+      if (t.classList && t.classList.contains('inline-answer-text')) refreshAnswerPreview(t);
+      if (t.id === 'mtoken-input') {
+        var prev = $('#mtoken-preview');
+        if (prev) { try { prev.innerHTML = renderMathText(t.value); } catch (err) {} }
       }
     });
 

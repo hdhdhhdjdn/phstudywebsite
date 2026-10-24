@@ -658,3 +658,8 @@ main { margin: 0 0 0 238px; max-width: 1180px; padding: 34px 42px 90px; }
 .frac { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; margin: 0 2px; line-height: 1.15; font-size: 0.95em; }
 .frac .fnum { border-bottom: 1px solid currentColor; padding: 0 3px; }
 .frac .fden { padding: 0 3px; }
+/* 答案公式预览 */
+.answer-preview { margin-top: 6px; padding: 6px 10px; background: #f7f9fc; border: 1px dashed #d7e0ec; border-radius: 8px; font-size: 14px; line-height: 1.7; min-height: 26px; }
+.answer-preview .muted { color: #98a2b3; font-size: 12px; }
+.mtok { color: #1b64d1; background: #eaf2ff; border-radius: 4px; padding: 0 3px; cursor: pointer; }
+.mtok:hover { background: #d8e7ff; }

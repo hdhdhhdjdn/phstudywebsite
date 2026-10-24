@@ -294,6 +294,25 @@
   </div>
 </div>
 
+<!-- ============ 编辑公式片段 ============ -->
+<div id="modal-math-token" class="modal hidden">
+  <div class="modal-mask" data-action="close-math-token"></div>
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>编辑公式</h2>
+      <button class="icon-btn" data-action="close-math-token" title="关闭">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="formula-preview" id="mtoken-preview"></div>
+      <textarea id="mtoken-input" rows="2" placeholder="改这里：例如把 x^2 改成 y^3"></textarea>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn ghost" data-action="close-math-token">取消</button>
+        <button class="btn primary" data-action="save-math-token">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ============ 公式编辑器 ============ -->
 <div id="modal-formula" class="modal hidden">
   <div class="modal-mask" data-action="close-formula"></div>
