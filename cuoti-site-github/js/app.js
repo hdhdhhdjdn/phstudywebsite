@@ -969,13 +969,31 @@
     } catch (e) {}
   }
 
+  var MATHLIVE_INIT = false;
+  function initMathLive() {
+    if (MATHLIVE_INIT) return;
+    if (typeof window.MathfieldElement === 'undefined') return;
+    MATHLIVE_INIT = true;
+    try {
+      window.MathfieldElement.fontsDirectory = 'css/fonts/';
+      window.MathfieldElement.soundsDirectory = null;
+    } catch (e) {}
+  }
+
   function makeMathField() {
-    var span = document.createElement('span');
-    span.className = 'mathfield';
-    span.setAttribute('contenteditable', 'true');
-    span.setAttribute('data-ph', '在此处键入公式');
-    span.setAttribute('spellcheck', 'false');
-    return span;
+    initMathLive();
+    if (typeof window.MathfieldElement === 'undefined') {
+      var span = document.createElement('span');
+      span.className = 'mathfield mathfield-plain';
+      span.setAttribute('contenteditable', 'true');
+      span.setAttribute('data-ph', '在此处键入公式');
+      return span;
+    }
+    var mf = document.createElement('math-field');
+    mf.className = 'mathfield';
+    mf.setAttribute('smart-fence', '');
+    mf.setAttribute('virtual-keyboard-mode', 'manual');
+    return mf;
   }
 
   // 把原始写法转成 LaTeX
@@ -1102,6 +1120,7 @@
 
   function updateMathFieldRender(field) {
     if (!field) return;
+    if (field.tagName === 'MATH-FIELD') return;
     field.setAttribute('data-tex', field.textContent || '');
   }
 
@@ -1111,22 +1130,11 @@
   }
 
   function fieldTex(field) {
-    var raw = (field && field.textContent) || '';
-    return rawToLatex(raw);
-    var out = '';
-    Array.prototype.slice.call(field.childNodes).forEach(function (node) {
-      if (node.nodeType === 3) { out += node.nodeValue; return; }
-      if (node.nodeType !== 1) return;
-      var tag = node.tagName;
-      if (tag === 'SUP') out += '^{' + node.textContent + '}';
-      else if (tag === 'SUB') out += '_{' + node.textContent + '}';
-      else if (node.classList && node.classList.contains('mfrac')) {
-        var nu = node.querySelector('.fnum');
-        var de = node.querySelector('.fden');
-        out += '\\frac{' + (nu ? nu.textContent : '') + '}{' + (de ? de.textContent : '') + '}';
-      } else out += node.textContent;
-    });
-    return out;
+    if (!field) return '';
+    if (field.tagName === 'MATH-FIELD') {
+      try { return field.getValue('latex') || field.value || ''; } catch (e) { return field.value || ''; }
+    }
+    return rawToLatex(field.textContent || '');
   }
 
   function insertFieldInPart(itemId, partLabel) {
@@ -1204,49 +1212,28 @@
     var node = range.startContainer;
     if (node.nodeType !== 3 || !field.contains(node)) return false;
     var off = range.startOffset;
-    var text = node.nodeValue.slice(0, off);
-    var m = text.match(/([A-Za-z0-9)\]]+(?:\^\{?[A-Za-z0-9+\-]+\}?|_\{?[A-Za-z0-9]+\}?|\/[A-Za-z0-9)\]]+))$/);
+    var before = node.nodeValue.slice(0, off);
+    var m = before.match(/(\S+)$/);
     if (!m) return false;
-    var tok = m[0];
-    var base, sup, sub, num, den;
-    var mm;
-    if ((mm = tok.match(/^([A-Za-z0-9)\]]+)\^\{?([^{}]+)\}?$/))) { base = mm[1]; sup = mm[2]; }
-    else if ((mm = tok.match(/^([A-Za-z0-9)\]]+)_\{?([^{}]+)\}?$/))) { base = mm[1]; sub = mm[2]; }
-    else if ((mm = tok.match(/^([A-Za-z0-9)\]]+)\/([A-Za-z0-9)\]]+)$/))) { num = mm[1]; den = mm[2]; }
-    else return false;
+    var tok = m[1];
+    if (!/[\^_\/]/.test(tok)) return false;
+    var tex = smartLatex(tok);
+    if (!tex || tex === tok) return false;
 
     var start = off - tok.length;
     var r = document.createRange();
     r.setStart(node, start);
     r.setEnd(node, off);
     r.deleteContents();
-
-    var frag = document.createDocumentFragment();
-    if (num != null) {
-      var frac = document.createElement('span');
-      frac.className = 'mfrac';
-      var nu = document.createElement('span'); nu.className = 'fnum'; nu.textContent = num;
-      var de = document.createElement('span'); de.className = 'fden'; de.textContent = den;
-      frac.appendChild(nu); frac.appendChild(de);
-      frag.appendChild(frac);
-      frag.appendChild(document.createTextNode(' '));
-    } else {
-      frag.appendChild(document.createTextNode(base));
-      var e = document.createElement(sup != null ? 'sup' : 'sub');
-      e.textContent = sup != null ? sup : sub;
-      frag.appendChild(e);
-      frag.appendChild(document.createTextNode(' '));
-    }
-    r.insertNode(frag);
-    // 光标放到最后插入的空格之后
-    var walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT, null);
-    var last = null, t;
-    while ((t = walker.nextNode())) last = t;
-    if (last) {
-      var nr = document.createRange();
-      nr.setStart(last, last.nodeValue.length); nr.collapse(true);
-      sel.removeAllRanges(); sel.addRange(nr);
-    }
+    var chip = makeMathChip(tex);
+    chip.className = 'mathchip mathchip-inline';
+    r.insertNode(chip);
+    var space = document.createTextNode(' ');
+    chip.parentNode.insertBefore(space, chip.nextSibling);
+    var nr = document.createRange();
+    nr.setStart(space, 1); nr.collapse(true);
+    sel.removeAllRanges(); sel.addRange(nr);
+    updateMathFieldRender(field);
     return true;
   }
 
@@ -3711,6 +3698,7 @@
       if (!t) return;
       if (t.classList && t.classList.contains('rich-answer')) { /* 富文本框内部处理 */ }
       if (t.tagName === 'TEXTAREA' && t.classList && t.classList.contains('inline-answer-text')) refreshAnswerPreview(t);
+      if (t && t.tagName === 'MATH-FIELD') return;
       if (t && t.classList && t.classList.contains('mathfield')) {
         updateMathFieldRender(t);
         return;
@@ -3828,6 +3816,7 @@
     // 公式框失焦后按数学字体重排
     document.addEventListener('focusout', function (e) {
       var t = e.target;
+      if (t && t.tagName === 'MATH-FIELD') return;
       if (t && t.classList && t.classList.contains('mathfield')) {
         updateMathFieldRender(t);
         return;

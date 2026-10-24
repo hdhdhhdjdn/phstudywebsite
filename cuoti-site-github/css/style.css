@@ -836,3 +836,13 @@ math-field.mathfield::part(menu-toggle) { display: none; }
 .mathfield .mfrac .fnum { border-bottom: 1px solid currentColor; padding: 0 3px; }
 .mathfield .mfrac .fden { padding: 0 3px; }
 .mathfield .mf-render, .mathfield .mf-input, .mathfield .mf-choices { display: none !important; }
+/* 行内转换的公式块：与文字浑然一体 */
+.mathfield .mathchip, .mathfield .mathchip-inline {
+  display: inline; background: transparent; border: none; box-shadow: none; padding: 0; margin: 0;
+  font-family: KaTeX_Main, "Cambria Math", serif;
+}
+/* MathLive 公式框 */
+math-field.mathfield { min-width: 220px; min-height: 40px; padding: 2px 8px; background: #f3f5f8; border: 1px solid #cfd8e3; border-radius: 6px; font-size: 20px; vertical-align: middle; }
+math-field.mathfield:focus-within { background: #fff; border-color: #7aa7ff; box-shadow: 0 0 0 2px rgba(90,140,255,.18); }
+math-field.mathfield::part(virtual-keyboard-toggle), math-field.mathfield::part(menu-toggle) { display: none; }
+.mathfield.mathfield-plain { display: inline-block; padding: 6px 10px; background: #f3f5f8; border: 1px solid #cfd8e3; border-radius: 6px; font-family: KaTeX_Math, "Cambria Math", serif; font-size: 20px; }
