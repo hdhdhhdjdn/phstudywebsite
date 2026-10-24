@@ -345,173 +345,59 @@ async function callTranscribeAPI(cfg, item) {
   const imageIds = (item && item.imageIds) || [];
   if (!imageIds.length) throw new Error('这道题没有图片');
 
-  const content = [{
-    type: 'text',
-    text: '图片是试卷照片，正文文字较小，请逐字仔细阅读（不要只读页眉和标题）——请识别图片中的题目，并以 JSON 返回：{"text":"题目文字","hasImage":true 或 false}\n' +
-      'text 要求：\n' +
-      '1. 保留题号、选项、单位、数字，不要遗漏\n' +
-      '2. 所有数学公式用 $...$ 包裹的 LaTeX（如 $\\frac{1}{2}$、$x^2$、$\\sqrt{3}$、$H_2O$），普通文字不要放进 $...$\n' +
-      '3. 不要添加答案、解析或解释\n' +
-      '3.1 【必须完整】从页面最顶部开始逐行识别，按原顺序输出，任何一行都不能跳过；特别注意题号（如 1.）后面的整段描述文字（例如 A uniform solid disk of mass m…），不要只识别小问 a/b/c，也不要漏掉说明、条件、图表标题（Figure 1）、单位\n' +
-      '3.2 如果某段文字看不清，尽量根据上下文补全并保留原意，不要整段跳过\n' +
-      '4. 保留原题的换行和版式：每个选项单独一行，题干分行的保持分行\n' +
-      '5. 方程组请写成 LaTeX 的 cases 多行环境（每行一个方程，行与行之间用两个反斜杠分隔）\n' +
-      '6. 如果图片里有多道题，按顺序全部输出\n' +
-      '7. 不要使用 Markdown 符号（*、#、`）\n' +
-
-      '8. 如果提供了多张图片（多页），必须按顺序识别每一张图片的全部内容，页与页之间空一行，不要只识别第一张\n' +      'hasImage 含义：这道题是否包含"必须看图才能作答"的内容（几何图形、函数图像、坐标图、数据表格、实验装置图、示意图等）。\n' +
-      '如果纯文字就能完整表达题目（如解方程、文字应用题、纯公式推导），hasImage 为 false。\n' +
-      '只输出 JSON，不要输出其它内容。'
-  }];
+  // 取出所有图片（多页题目逐张识别）
+  const bufs = [];
   for (let i = 0; i < imageIds.length; i++) {
-    const file = path.join(UPLOAD_DIR, String(imageIds[i]) + '.jpg');
-    if (fs.existsSync(file)) {
-      content.push({
-        type: 'image_url',
-        image_url: { url: 'data:image/jpeg;base64,' + fs.readFileSync(file).toString('base64') }
-      });
+    const buf = fs.existsSync(path.join(UPLOAD_DIR, String(imageIds[i]) + '.jpg')) ? fs.readFileSync(path.join(UPLOAD_DIR, String(imageIds[i]) + '.jpg')) : null;
+    if (buf && buf.length) bufs.push(buf);
+  }
+  if (!bufs.length) throw new Error('图片文件不存在');
+
+  const PROMPT = "请识别这张图片中的题目文字，并以 JSON 返回：{\"text\":\"题目文字\",\"hasImage\":true 或 false}\ntext 要求：\n1. 保留题号、选项、单位、数字，不要遗漏\n2. 数学公式用 $...$ 包裹的 LaTeX，普通文字不要放进 $...$\n3. 不要添加答案、解析或解释\n3.1 【必须完整】从页面最顶部开始逐行识别，按原顺序输出，任何一行都不能跳过；特别注意题号（如 1.）后面的整段描述文字，不要只识别小问 a/b/c，也不要漏掉说明、条件、图表标题、单位\n3.2 图片是试卷照片，正文文字较小，请逐字仔细阅读，不要只读页眉和标题\n4. 保留原题的换行和版式\n5. 方程组用 LaTeX cases 多行环境（每行一个方程）\n6. 不要使用 Markdown 符号\nhasImage 含义：这道题是否包含必须看图才能作答的内容（几何图、函数图像、坐标图、表格、实验装置图等）；纯文字题 hasImage 为 false。\n只输出 JSON，不要输出其它内容。";
+
+  async function ocrOne(buf) {
+    const content = [
+      { type: 'text', text: PROMPT },
+      { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + buf.toString('base64') } }
+    ];
+    const url = cfg.gradeBase.replace(/\/+$/, '') + '/chat/completions';
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.gradeKey },
+      body: JSON.stringify({
+        model: cfg.gradeModel,
+        reasoning_effort: /^glm-5/i.test(String(cfg.gradeModel || '')) ? 'low' : undefined,
+        messages: [
+          { role: 'system', content: '你是一个把题目图片转成文字的 OCR 助手，按要求的 JSON 格式输出。' },
+          { role: 'user', content: content }
+        ],
+        temperature: 0.1,
+        max_tokens: 4000
+      })
+    });
+    if (!resp.ok) {
+      const t = await resp.text();
+      throw new Error('接口返回 ' + resp.status + '：' + String(t).slice(0, 200));
     }
-  }
-
-  const url = cfg.gradeBase.replace(/\/+$/, '') + '/chat/completions';
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.gradeKey },
-    body: JSON.stringify({
-      model: cfg.gradeModel,
-      reasoning_effort: reasoningEffort(cfg.gradeModel),
-      messages: [
-        { role: 'system', content: '你是一个把题目图片转成文字的 OCR 助手，按要求的 JSON 格式输出。' },
-        { role: 'user', content: content }
-      ],
-      temperature: 0.1,
-      max_tokens: 4000
-    })
-  });
-  if (!resp.ok) {
-    const t = await resp.text();
-    throw new Error('接口返回 ' + resp.status + '：' + String(t).slice(0, 200));
-  }
-  const data = await resp.json();
-  const raw = extractMessageText(data);
-  if (!raw) { console.error('[api] empty response:', JSON.stringify(data).slice(0, 300)); throw modelEmptyError(data); }
-
-  const parsed = extractJSON(raw);
-  if (parsed && typeof parsed.text === 'string') {
-    return { text: parsed.text.trim(), hasImage: parsed.hasImage === true };
-  }
-  return { text: String(raw).trim(), hasImage: true };
-}
-
-// ---------------- AI 识别 IB 知识点 ----------------
-async function callTagAPI(cfg, item) {
-  const imageIds = (item && item.imageIds) || [];
-  const parts = [];
-  parts.push('这是一道 IB DP 学生的错题，请判断它属于哪门学科、哪个 IB DP 知识点。');
-  if (item.question) parts.push('【题目文字】\n' + item.question);
-  if (!item.question && !imageIds.length) throw new Error('这道题没有题干也没有图片');
-  parts.push('学科只能从这个列表里选：数学 AA、数学 AI、物理、化学、生物、经济、商业管理、历史、地理、哲学、中文 A、英语 A、英语 B、TOK。');
-  parts.push('知识点命名要求：\n' +
-    '- 物理：用 IB DP 物理大纲主题（A. Space, time and motion / B. The particulate nature of matter / C. Wave behaviour / D. Fields / E. Nuclear and quantum physics），可写到二级，如 "D.2 Gravitational fields"\n' +
-    '- 化学：Structure 1-3 / Reactivity 1-2 的对应主题\n' +
-    '- 数学：Number and algebra / Functions / Geometry and trigonometry / Statistics and probability / Calculus\n' +
-    '- 其他科目：用 IB 大纲里的 topic 名称\n' +
-    '最多 3 个知识点，从最相关开始。只输出 JSON：{"subject":"学科","topics":["知识点1","知识点2"],"confidence":"high 或 medium 或 low"}');
-
-  const content = [{ type: 'text', text: parts.join('\n\n') }];
-  for (let i = 0; i < imageIds.length; i++) {
-    const file = path.join(UPLOAD_DIR, String(imageIds[i]) + '.jpg');
-    if (fs.existsSync(file)) {
-      content.push({
-        type: 'image_url',
-        image_url: { url: 'data:image/jpeg;base64,' + fs.readFileSync(file).toString('base64') }
-      });
+    const data = await resp.json();
+    const raw = extractMessageText(data);
+    if (!raw) throw modelEmptyError(data);
+    const parsed = extractJSON(raw);
+    if (parsed && typeof parsed.text === 'string') {
+      return { text: parsed.text.trim(), hasImage: parsed.hasImage === true };
     }
+    return { text: String(raw).trim(), hasImage: true };
   }
 
-  const url = cfg.gradeBase.replace(/\/+$/, '') + '/chat/completions';
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.gradeKey },
-    body: JSON.stringify({
-      model: cfg.gradeModel,
-      reasoning_effort: reasoningEffort(cfg.gradeModel),
-      messages: [
-        { role: 'system', content: '你是熟悉 IB DP 课程大纲的老师，只输出 JSON。' },
-        { role: 'user', content: content }
-      ],
-      temperature: 0.1,
-      max_tokens: 1500
-    })
-  });
-  if (!resp.ok) {
-    const t = await resp.text();
-    throw new Error('接口返回 ' + resp.status + '：' + String(t).slice(0, 200));
+  // 逐页识别后拼接（避免多图时模型只输出其中一页）
+  const texts = [];
+  let hasImage = false;
+  for (let i = 0; i < bufs.length; i++) {
+    const r = await ocrOne(bufs[i]);
+    if (r.text) texts.push(r.text.trim());
+    if (r.hasImage) hasImage = true;
   }
-  const data = await resp.json();
-  const raw = extractMessageText(data);
-  if (!raw) { console.error('[api] empty response:', JSON.stringify(data).slice(0, 300)); throw modelEmptyError(data); }
-  const parsed = extractJSON(raw);
-  if (!parsed) throw new Error('模型返回的不是合法 JSON');
-  return {
-    subject: String(parsed.subject || '').trim(),
-    topics: Array.isArray(parsed.topics) ? parsed.topics.map(function (t) { return String(t).trim(); }).filter(Boolean).slice(0, 3) : [],
-    confidence: String(parsed.confidence || '')
-  };
-}
-
-// ---------------- AI 定位图形区域（自动裁剪用） ----------------
-async function callFigureAPI(cfg, item) {
-  const imageIds = (item && item.imageIds) || [];
-  if (!imageIds.length) throw new Error('这道题没有图片');
-  const file = path.join(UPLOAD_DIR, String(imageIds[0]) + '.jpg');
-  if (!fs.existsSync(file)) throw new Error('图片文件不存在');
-
-  const prompt = '这是一道题目图片，可能同时包含题干文字和图形（坐标图、函数图像、几何图、示意图、表格等）。\n' +
-    '请找出"图形/图表"部分所在的矩形区域，用相对坐标返回（图片左上角为 (0,0)，右下角为 (1,1)）：\n' +
-    '{"found": true 或 false, "box": {"x": 0.5, "y": 0.05, "w": 0.45, "h": 0.9}, "note": "简述图形内容"}\n' +
-    '要求：\n' +
-    '1. box 必须完整包住图形，不要包含题干文字\n' +
-    '2. 如果图片里没有图形（纯文字题），found 为 false，box 全 0\n' +
-    '3. 只输出 JSON，不要解释';
-
-  const url = cfg.gradeBase.replace(/\/+$/, '') + '/chat/completions';
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.gradeKey },
-    body: JSON.stringify({
-      model: cfg.gradeModel,
-      messages: [
-        { role: 'system', content: '你是图像版面分析助手，能定位题目中的图形区域，只输出 JSON。' },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + fs.readFileSync(file).toString('base64') } }
-          ]
-        }
-      ],
-      temperature: 0.1,
-      max_tokens: 800,
-      reasoning_effort: reasoningEffort(cfg.gradeModel)
-    })
-  });
-  if (!resp.ok) {
-    const t = await resp.text();
-    throw new Error('接口返回 ' + resp.status + '：' + String(t).slice(0, 200));
-  }
-  const data = await resp.json();
-  const raw = extractMessageText(data);
-  if (!raw) throw modelEmptyError(data);
-  const parsed = extractJSON(raw);
-  if (!parsed) throw new Error('模型返回的不是合法 JSON');
-  const box = parsed.box || {};
-  const num = function (v) { var n = Number(v); return isFinite(n) ? Math.min(1, Math.max(0, n)) : 0; };
-  return {
-    found: parsed.found === true,
-    box: { x: num(box.x), y: num(box.y), w: num(box.w), h: num(box.h) },
-    note: String(parsed.note || '')
-  };
+  return { text: texts.join('\n\n'), hasImage: hasImage };
 }
 
 // ---------------- API ----------------
