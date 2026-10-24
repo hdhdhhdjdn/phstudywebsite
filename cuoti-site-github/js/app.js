@@ -889,7 +889,8 @@
     } else {
       questionHTML = thumbsBlock;
     }
-    return '<article class="card item-card" data-id="' + esc(it.id) + '">' +
+    var __collapsed = !(state.expanded && state.expanded[it.id]);
+    return '<article class="card item-card' + (__collapsed ? ' collapsed' : '') + '" data-id="' + esc(it.id) + '">' +
       '<div class="item-head">' +
         '<span class="badge ' + subjectClass(it.subject) + '">' + esc(it.subject || '其他') + '</span>' +
         '<span class="badge st-' + esc(statusOf(it.id)) + '">' + esc(statusLabel(statusOf(it.id))) + '</span>' +
@@ -898,6 +899,7 @@
         '<span class="item-source">' + esc(it.source || '') + '</span>' +
         ownerChip +
         '<span class="grow"></span>' +
+        '<button class="link" data-action="toggle-card" data-id="' + esc(it.id) + '">' + (__collapsed ? '▸ 展开' : '▾ 收起') + '</button>' +
         (canEdit ? '<button class="link" data-action="toggle-mastered" data-id="' + esc(it.id) + '">' + (mastered ? '取消已掌握' : '标记已掌握') + '</button>' : '') +
         (__multipart ? '' : '<button class="link" data-action="toggle-answer-box" data-id="' + esc(it.id) + '">✍️ 作答</button>') +
         ((canEdit && state.cloud && typeof Cloud !== 'undefined' && Cloud.health && Cloud.health.autoGrade && (it.imageIds || []).length)
@@ -915,6 +917,8 @@
         (canEdit ? '<button class="link" data-action="edit-item" data-id="' + esc(it.id) + '">编辑</button>' : '') +
         (canEdit ? '<button class="link danger" data-action="delete-item" data-id="' + esc(it.id) + '">删除</button>' : '') +
       '</div>' +
+      '<div class="card-preview">' + esc(String(it.question || '（只有图片）').replace(/\s+/g, ' ').slice(0, 110)) + '</div>' +
+      '<div class="card-body">' +
       questionHTML +
       ((it.imageIds || []).length && (it.question || '').replace(/\s/g, '').length < 40
         ? '<div class="q-warn">⚠️ 文字可能没识别完整：点「🔤 转文字」重试，或点「编辑」手动补充</div>'
@@ -935,6 +939,7 @@
         '</div>' +
       '</div>') +
       (it.note ? '<div class="mine-line">📝 ' + esc(it.note) + '</div>' : '') +
+      '</div>' +
     '</article>';
   }
 
@@ -2785,6 +2790,15 @@
       if (action === 'new-item') { openEditor(null); return; }
       if (action === 'edit-item') { openEditor(id); return; }
       if (action === 'delete-item') { deleteItem(id); return; }
+      if (action === 'toggle-card') {
+        state.expanded = state.expanded || {};
+        var cardEl = el.closest('article.item-card');
+        var willExpand = !state.expanded[id];
+        state.expanded[id] = willExpand;
+        if (cardEl) cardEl.classList.toggle('collapsed', !willExpand);
+        el.textContent = willExpand ? '▾ 收起' : '▸ 展开';
+        return;
+      }
       if (action === 'toggle-mastered') { toggleMastered(id); return; }
       if (action === 'open-formula') { openFormulaEditor(id); return; }
       if (action === 'part-formula') { openFormulaEditor(id, el.getAttribute('data-part')); return; }

@@ -648,3 +648,9 @@ main { margin: 0 0 0 238px; max-width: 1180px; padding: 34px 42px 90px; }
 .part-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
 .part-result { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
 .part-result .answer-line { background: #f4f9f5; border-color: #cfe6d8; }
+/* 题目卡片折叠 */
+.item-card.collapsed .card-body { display: none; }
+.item-card.collapsed { padding-bottom: 10px; }
+.item-card.collapsed .item-head { margin-bottom: 0; }
+.card-preview { color: #5b6472; font-size: 13px; line-height: 1.5; margin-top: 6px; }
+.item-card:not(.collapsed) .card-preview { display: none; }
