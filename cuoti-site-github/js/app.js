@@ -757,7 +757,8 @@
       return '<span class="badge topic" data-action="filter-topic" data-topic="' + esc(id) + '">' + esc(topicName(id)) + '</span>';
     }).join('');
     var causeChips = (it.causes || []).map(function (k) {
-      return '<span class="badge cause">' + esc(causeLabel(k)) + '</span>';
+      var note = (it.causeNotes || {})[k] || '';
+      return '<span class="badge cause"' + (note ? ' title="' + esc(note) + '"' : '') + '>' + esc(causeLabel(k)) + (note ? '：' + esc(note) : '') + '</span>';
     }).join('');
     var missed = (it.markScheme || []).filter(function (m) { return m.missed; }).length;
     var msChip = missed ? '<span class="badge cause">漏 ' + missed + ' 个要点</span>' : '';
@@ -1255,6 +1256,12 @@
       return saveProgress(it.id, { status: __st });
     }).then(function () {
       toast('保存完成', 'ok');
+      // 手动录入（无图片）→ 自动让 AI 分类科目/知识点/错因
+      if (state.cloud && typeof Cloud !== 'undefined' && !(it.imageIds || []).length) {
+        setTimeout(function () {
+          Cloud.tag(it.id).then(function () { return bootData(); }).then(function () { renderCurrent(); }).catch(function () {});
+        }, 600);
+      }
       // 新上传且带图片、题干为空 → 自动转文字（转完自动裁剪图形）
       if ((it.imageIds || []).length && !(it.question || '').trim() && state.cloud &&
           typeof Cloud !== 'undefined' && Cloud.health && Cloud.health.autoGrade) {
@@ -1966,6 +1973,31 @@
   }
 
   // 识别到多道题时，拆成多条错题
+  // AI 批量分类（科目 + 知识点 + 错因）
+  function classifyAllItems() {
+    if (!state.cloud || typeof Cloud === 'undefined') { toast('需要班级服务器模式', 'err'); return; }
+    var todo = state.items.slice();
+    if (!todo.length) { toast('没有需要分类的题目', 'ok'); return; }
+    var i = 0, done = 0;
+    toast('开始 AI 分类，共 ' + todo.length + ' 道，请稍候…', 'ok');
+    function next() {
+      if (i >= todo.length) {
+        toast('分类完成：' + done + ' / ' + todo.length, 'ok');
+        bootData().then(function () { renderCurrent(); });
+        return;
+      }
+      var it = todo[i++];
+      Cloud.tag(it.id).then(function (res) {
+        done++;
+        var c = (res && res.causes && res.causes[0]) ? res.causes[0] : null;
+        toast('已分类 ' + done + '/' + todo.length + '：' + (res.subject || '') + (c ? ' · ' + c.type + ' ' + (c.reason || '') : ''), 'ok');
+      }).catch(function () {}).then(function () {
+        setTimeout(next, 300);
+      });
+    }
+    next();
+  }
+
   function splitIntoItems(itemId, questions) {
     var it = byId(state.items, 'id', itemId);
     if (!it) return;
@@ -2818,6 +2850,7 @@
         el.textContent = nowHidden ? '🖼 查看原图' : '🙈 隐藏原图';
         return;
       }
+      if (action === 'classify-all') { classifyAllItems(); return; }
       if (action === 'save-grade-config') {
         var cfg = {
           base: ($('#cfg-base') && $('#cfg-base').value.trim()) || '',

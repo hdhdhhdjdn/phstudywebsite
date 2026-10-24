@@ -350,7 +350,9 @@ async function callTagAPI(cfg, item) {
   parts.push('这是一道 IB DP 学生的错题，请判断它属于哪门学科、哪个 IB DP 知识点。');
   if (item.question) parts.push('【题目文字】\n' + item.question);
   parts.push('学科只能从以下选择：数学 AA、数学 AI、物理、化学、生物、经济、商业管理、历史、地理、哲学、中文 A、英语 A、英语 B、TOK。');
-  parts.push('知识点命名：物理用 A. Space, time and motion / B. The particulate nature of matter / C. Wave behaviour / D. Fields / E. Nuclear and quantum physics（可到二级，如 D.2 Gravitational fields）；化学用 Structure 1-3 / Reactivity 1-2 主题；数学用 Number and algebra / Functions / Geometry and trigonometry / Statistics and probability / Calculus；其他用 IB 大纲 topic。最多 3 个。只输出 JSON：{"subject":"学科","topics":["知识点1"],"confidence":"high 或 medium 或 low"}');
+  parts.push('知识点命名：物理用 A. Space, time and motion / B. The particulate nature of matter / C. Wave behaviour / D. Fields / E. Nuclear and quantum physics（可到二级，如 D.2 Gravitational fields）；化学用 Structure 1-3 / Reactivity 1-2 主题；数学用 Number and algebra / Functions / Geometry and trigonometry / Statistics and probability / Calculus；其他用 IB 大纲 topic。最多 3 个。');
+  parts.push('错因只能从这四类选一个：K 知识（概念/公式没记住或记错）、M 方法（思路/方法不会或用错）、C 计算（会做但算错/单位错/代数错）、E 表达审题（读题不清/漏条件/答非所问/表达不规范）。');
+  parts.push('只输出 JSON：{"subject":"学科","topics":["知识点1"],"causes":[{"type":"K","reason":"一句话说明错在哪"}],"confidence":"high 或 medium 或 low"}');
   const imageIds = (item && item.imageIds) || [];
   const content = [{ type: 'text', text: parts.join('\n\n') }];
   for (let i = 0; i < Math.min(imageIds.length, 2); i++) {
@@ -382,6 +384,9 @@ async function callTagAPI(cfg, item) {
   return {
     subject: String(parsed.subject || '').trim(),
     topics: Array.isArray(parsed.topics) ? parsed.topics.map(function (t) { return String(t).trim(); }).filter(Boolean).slice(0, 3) : [],
+    causes: Array.isArray(parsed.causes) ? parsed.causes.map(function (c) {
+      return { type: String((c && c.type) || 'K').toUpperCase().charAt(0), reason: String((c && c.reason) || '') };
+    }).filter(function (c) { return 'KMCE'.indexOf(c.type) >= 0; }).slice(0, 3) : [],
     confidence: String(parsed.confidence || '')
   };
 }
@@ -808,13 +813,17 @@ async function handleAPI(req, res, pathname, url) {
         }
         if (it.topics.indexOf(found.id) < 0) it.topics.push(found.id);
       });
-      it.updatedAt = nowISO();
+      if ((result.causes || []).length) {
+          it.causes = result.causes.map(function (c) { return c.type; });
+          it.causeNotes = {};
+          result.causes.forEach(function (c) { if (c.reason) it.causeNotes[c.type] = c.reason; });
+        }
+        it.updatedAt = nowISO();
       save();
       return sendJSON(res, 200, {
         ok: true,
         subject: it.subject,
-        topics: result.topics,
-        added: added,
+        topics: result.topics, added: added, causes: result.causes || [],
         confidence: result.confidence
       });
     } catch (err) {
@@ -902,9 +911,31 @@ async function handleAPI(req, res, pathname, url) {
         it.imageIds = [];
         imageRemoved = true;
       }
-      it.updatedAt = nowISO();
+      
+        // 自动分类：科目 + 知识点 + 错因（失败不影响转文字）
+        var classification = null;
+        try {
+          var cls = await callTagAPI(cfg, it);
+          classification = cls;
+          if (cls.subject) it.subject = cls.subject;
+          it.topics = it.topics || [];
+          (cls.topics || []).forEach(function (name) {
+            var t = db.topics.filter(function (x) { return x.name === name && x.subject === it.subject; })[0];
+            if (!t) {
+              t = { id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), subject: it.subject, name: name, definition: '', formula: '', pitfalls: '', createdAt: new Date().toISOString() };
+              db.topics.push(t);
+            }
+            if (it.topics.indexOf(t.id) < 0) it.topics.push(t.id);
+          });
+          if ((cls.causes || []).length) {
+            it.causes = cls.causes.map(function (c) { return c.type; });
+            it.causeNotes = {};
+            cls.causes.forEach(function (c) { if (c.reason) it.causeNotes[c.type] = c.reason; });
+          }
+        } catch (e) { console.error('[auto-classify]', e && e.message); }
+        it.updatedAt = nowISO();
       save();
-      return sendJSON(res, 200, { ok: true, question: it.question, questions: questions, hasImage: result.hasImage, imageRemoved: imageRemoved, keptOld: keptOld });
+      return sendJSON(res, 200, { ok: true, question: it.question, questions: questions, classification: classification, hasImage: result.hasImage, imageRemoved: imageRemoved, keptOld: keptOld });
     } catch (err) {
       console.error('[transcribe]', err.message);
       return sendJSON(res, 500, { error: '图片转文字失败：' + err.message });
