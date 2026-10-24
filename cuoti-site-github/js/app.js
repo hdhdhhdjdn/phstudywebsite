@@ -919,6 +919,32 @@
     return out;
   }
 
+  function insertFieldInPart(itemId, partLabel) {
+    var card = document.querySelector('article.item-card[data-id="' + itemId + '"]');
+    var box = card ? card.querySelector('[data-part="' + partLabel + '"]') : null;
+    if (!box || !box.classList.contains('rich-answer')) {
+      var boxes = $$('.rich-answer');
+      box = boxes[boxes.length - 1] || null;
+    }
+    if (!box) return false;
+    box.focus();
+    var field = makeMathField();
+    var sel = window.getSelection();
+    if (sel && sel.rangeCount && box.contains(sel.getRangeAt(0).startContainer)) {
+      var r = sel.getRangeAt(0);
+      r.deleteContents();
+      r.insertNode(field);
+    } else {
+      box.appendChild(field);
+    }
+    var nr = document.createRange();
+    nr.setStart(field, 0); nr.collapse(true);
+    if (sel) { sel.removeAllRanges(); sel.addRange(nr); }
+    showFormulaDock();
+    $(document).ready;
+    return true;
+  }
+
   function insertMathFieldAtCaret() {
     var sel = window.getSelection();
     var host = sel && sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
@@ -3307,8 +3333,14 @@
         return;
       }
       if (action === 'toggle-mastered') { toggleMastered(id); return; }
-      if (action === 'open-formula') { openFormulaEditor(id); return; }
-      if (action === 'part-formula') { openFormulaEditor(id, el.getAttribute('data-part')); return; }
+      if (action === 'open-formula') {
+        insertFieldInPart(id, el.getAttribute('data-part') || null);
+        return;
+      }
+      if (action === 'part-formula') {
+        if (insertFieldInPart(id, el.getAttribute('data-part'))) { toast('已插入公式框，用底部符号栏输入', 'ok'); }
+        return;
+      }
       if (action === 'part-solve') { solvePart(id, el.getAttribute('data-part'), true); return; }
       if (action === 'part-answer') { solvePart(id, el.getAttribute('data-part'), false); return; }
       if (action === 'close-formula') { hideModal('modal-formula'); return; }
