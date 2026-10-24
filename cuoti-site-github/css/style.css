@@ -784,3 +784,18 @@ math-field.mathfield::part(menu-toggle) { display: none; }
 .mathfield:not(:focus-within) .mf-render { display: block; }
 .mathfield:focus-within .mf-render { display: none; }
 .mathfield:not(:focus-within) .mf-input { display: none; }
+/* 公式框：输入时用数学字体显示原文（Word 线性输入效果） */
+.mathfield .mf-input {
+  font-family: "Cambria Math", "Latin Modern Math", KaTeX_Main, "Times New Roman", serif !important;
+  font-size: 20px !important;
+  font-style: italic;
+  font-weight: 400;
+  color: #111827 !important;
+  letter-spacing: 0.3px;
+  padding: 2px 6px;
+  line-height: 1.45;
+  background: #fff;
+  border-radius: 4px;
+}
+.mathfield .mf-input::placeholder { font-style: normal; font-size: 15px; color: #98a2b3; }
+.mathfield:not(:focus-within) .mf-render { font-size: 20px; }
