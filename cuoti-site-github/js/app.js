@@ -256,8 +256,23 @@
   function formatUnits(str) {
     return String(str).replace(/(?<![A-Za-z])([A-Za-z]{1,8})-([0-9]+)(?![0-9])/g, '$1<sup>-$2</sup>');
   }
+  // 普通数学写法：x^2 -> x²，x/y -> 分数，x_1 -> x₁
+  function formatMathShortcuts(str) {
+    var t = String(str);
+    t = t.replace(/([A-Za-z0-9\)\]\u03b1-\u03c9])\^\{([^{}]+)\}/g, '$1<sup>$2</sup>');
+    t = t.replace(/([A-Za-z0-9\)\]\u03b1-\u03c9])\^([A-Za-z0-9+\-]+)/g, '$1<sup>$2</sup>');
+    t = t.replace(/([A-Za-z0-9\)\]\u03b1-\u03c9])_\{([^{}]+)\}/g, '$1<sub>$2</sub>');
+    t = t.replace(/([A-Za-z0-9\)\]\u03b1-\u03c9])_([A-Za-z0-9]+)/g, '$1<sub>$2</sub>');
+    t = t.replace(/(?<![A-Za-z0-9/])([A-Za-z]\d*|\d+[A-Za-z]?)\s*\/\s*([A-Za-z]\d*|\d+)(?![A-Za-z0-9/])/g, function (m, a, b) {
+      if (!/[A-Za-z]/.test(a + b)) return m;      // 纯数字（如 4/8）不当分数
+      if (a.length > 12 || b.length > 12) return m;
+      return '<span class="frac"><span class="fnum">' + a + '</span><span class="fden">' + b + '</span></span>';
+    });
+    return t;
+  }
+
   function formatPlainMath(str) {
-    return formatUnits(formatChem(String(str)));
+    return formatUnits(formatChem(formatMathShortcuts(String(str))));
   }
 
   function renderMathText(text) {

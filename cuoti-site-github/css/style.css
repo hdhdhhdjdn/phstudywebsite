@@ -654,3 +654,7 @@ main { margin: 0 0 0 238px; max-width: 1180px; padding: 34px 42px 90px; }
 .item-card.collapsed .item-head { margin-bottom: 0; }
 .card-preview { color: #5b6472; font-size: 13px; line-height: 1.5; margin-top: 6px; }
 .item-card:not(.collapsed) .card-preview { display: none; }
+/* 自动识别的分式（x/y） */
+.frac { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; margin: 0 2px; line-height: 1.15; font-size: 0.95em; }
+.frac .fnum { border-bottom: 1px solid currentColor; padding: 0 3px; }
+.frac .fden { padding: 0 3px; }
