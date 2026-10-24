@@ -677,3 +677,11 @@ main { margin: 0 0 0 238px; max-width: 1180px; padding: 34px 42px 90px; }
 .rich-answer:empty:before { content: attr(data-ph); color: #9aa4b2; }
 .rich-answer .mathchip { display: inline-block; background: #eef5ff; border: 1px solid #cfe1ff; border-radius: 5px; padding: 0 4px; margin: 0 2px; cursor: pointer; }
 .rich-answer .mathchip:focus, .rich-answer .mathchip:hover { border-color: #7aa7ff; }
+/* Word 式公式框 */
+.mathfield { display: inline-block; min-width: 120px; min-height: 26px; padding: 2px 6px; margin: 0 3px; background: #f3f5f8; border: 1px solid #cfd8e3; border-radius: 4px; vertical-align: middle; }
+.mathfield:focus { background: #fff; border-color: #7aa7ff; box-shadow: 0 0 0 2px rgba(90,140,255,.15); }
+.mathfield:empty:before { content: attr(data-ph); color: #98a2b3; }
+.mathfield sup, .mathfield sub { font-size: 0.75em; }
+.mathfield .mfrac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; line-height: 1.1; text-align: center; }
+.mathfield .mfrac .fnum { border-bottom: 1px solid currentColor; padding: 0 3px; }
+.mathfield .mfrac .fden { padding: 0 3px; }

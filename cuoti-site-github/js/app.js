@@ -783,6 +783,111 @@
   }
 
   // ---------- 富文本答题框（框内直接显示公式） ----------
+  // ---------- Word 式公式框 ----------
+  function makeMathField() {
+    var span = document.createElement('span');
+    span.className = 'mathfield';
+    span.setAttribute('contenteditable', 'true');
+    span.setAttribute('data-ph', '在此处键入公式。');
+    return span;
+  }
+
+  function fieldTex(field) {
+    var out = '';
+    Array.prototype.slice.call(field.childNodes).forEach(function (node) {
+      if (node.nodeType === 3) { out += node.nodeValue; return; }
+      if (node.nodeType !== 1) return;
+      var tag = node.tagName;
+      if (tag === 'SUP') out += '^{' + node.textContent + '}';
+      else if (tag === 'SUB') out += '_{' + node.textContent + '}';
+      else if (node.classList && node.classList.contains('mfrac')) {
+        var nu = node.querySelector('.fnum');
+        var de = node.querySelector('.fden');
+        out += '\\frac{' + (nu ? nu.textContent : '') + '}{' + (de ? de.textContent : '') + '}';
+      } else out += node.textContent;
+    });
+    return out;
+  }
+
+  function insertMathFieldAtCaret() {
+    var sel = window.getSelection();
+    var host = sel && sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
+    var rich = host ? (host.nodeType === 1 ? host.closest('.rich-answer') : host.parentNode.closest('.rich-answer')) : null;
+    if (!rich) {
+      var boxes = $$('.rich-answer');
+      rich = boxes[boxes.length - 1] || null;
+    }
+    if (!rich) return false;
+    rich.focus();
+    var field = makeMathField();
+    var range = null;
+    if (sel && sel.rangeCount && rich.contains(sel.getRangeAt(0).startContainer)) range = sel.getRangeAt(0);
+    if (range) {
+      range.deleteContents();
+      range.insertNode(field);
+    } else {
+      rich.appendChild(field);
+    }
+    var nr = document.createRange();
+    nr.setStart(field, 0); nr.collapse(true);
+    if (sel) { sel.removeAllRanges(); sel.addRange(nr); }
+    return true;
+  }
+
+  // 公式框里：打字后按空格 → 把 x^2 / x_2 / a/b 渲染成上标/下标/分数
+  function fieldConvertBeforeSpace(field) {
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return false;
+    var range = sel.getRangeAt(0);
+    var node = range.startContainer;
+    if (node.nodeType !== 3 || !field.contains(node)) return false;
+    var off = range.startOffset;
+    var text = node.nodeValue.slice(0, off);
+    var m = text.match(/([A-Za-z0-9)\]]+(?:\^\{?[A-Za-z0-9+\-]+\}?|_\{?[A-Za-z0-9]+\}?|\/[A-Za-z0-9)\]]+))$/);
+    if (!m) return false;
+    var tok = m[0];
+    var base, sup, sub, num, den;
+    var mm;
+    if ((mm = tok.match(/^([A-Za-z0-9)\]]+)\^\{?([^{}]+)\}?$/))) { base = mm[1]; sup = mm[2]; }
+    else if ((mm = tok.match(/^([A-Za-z0-9)\]]+)_\{?([^{}]+)\}?$/))) { base = mm[1]; sub = mm[2]; }
+    else if ((mm = tok.match(/^([A-Za-z0-9)\]]+)\/([A-Za-z0-9)\]]+)$/))) { num = mm[1]; den = mm[2]; }
+    else return false;
+
+    var start = off - tok.length;
+    var r = document.createRange();
+    r.setStart(node, start);
+    r.setEnd(node, off);
+    r.deleteContents();
+
+    var frag = document.createDocumentFragment();
+    if (num != null) {
+      var frac = document.createElement('span');
+      frac.className = 'mfrac';
+      var nu = document.createElement('span'); nu.className = 'fnum'; nu.textContent = num;
+      var de = document.createElement('span'); de.className = 'fden'; de.textContent = den;
+      frac.appendChild(nu); frac.appendChild(de);
+      frag.appendChild(frac);
+      frag.appendChild(document.createTextNode(' '));
+    } else {
+      frag.appendChild(document.createTextNode(base));
+      var e = document.createElement(sup != null ? 'sup' : 'sub');
+      e.textContent = sup != null ? sup : sub;
+      frag.appendChild(e);
+      frag.appendChild(document.createTextNode(' '));
+    }
+    r.insertNode(frag);
+    // 光标放到最后插入的空格之后
+    var walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT, null);
+    var last = null, t;
+    while ((t = walker.nextNode())) last = t;
+    if (last) {
+      var nr = document.createRange();
+      nr.setStart(last, last.nodeValue.length); nr.collapse(true);
+      sel.removeAllRanges(); sel.addRange(nr);
+    }
+    return true;
+  }
+
   function makeMathChip(tex) {
     var span = document.createElement('span');
     span.className = 'mathchip';
@@ -799,7 +904,9 @@
     Array.prototype.slice.call(el.childNodes).forEach(function (node) {
       if (node.nodeType === 3) { out += node.nodeValue; return; }
       if (node.nodeType !== 1) return;
-      if (node.classList && node.classList.contains('mathchip')) {
+      if (node.classList && node.classList.contains('mathfield')) {
+        out += '$' + fieldTex(node) + '$';
+      } else if (node.classList && node.classList.contains('mathchip')) {
         out += '$' + (node.getAttribute('data-tex') || '') + '$';
       } else if (node.tagName === 'BR') {
         out += '\n';
@@ -2107,9 +2214,10 @@
     }
     if (!ta) { toast('找不到作答框，请重新点「✍️ 作答」', 'err'); return; }
     if (ta.classList && ta.classList.contains('rich-answer')) {
-      insertChipAtCaret(ta, src);
+      ta.focus();
+      insertMathFieldAtCaret();
       hideModal('modal-formula');
-      toast('公式已插入作答框', 'ok');
+      toast('已插入公式框，直接在框里输入公式', 'ok');
       return;
     }
     var display = /\\begin\{|\\\\/.test(src);
@@ -3246,6 +3354,10 @@
       if (e.key !== ' ' || e.isComposing) return;
       var t = e.target;
       if (!t || !t.classList) return;
+      if (t.classList && t.classList.contains('mathfield')) {
+        if (fieldConvertBeforeSpace(t)) e.preventDefault();
+        return;
+      }
       if (t.classList.contains('rich-answer')) {
         if (richConvertBeforeSpace(t)) e.preventDefault();
         return;
@@ -3254,6 +3366,19 @@
       if (convertBeforeSpace(t)) {
         e.preventDefault();
         refreshAnswerPreview(t);
+      }
+    });
+
+    // 空公式框按退格 → 删掉整个框
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Backspace') return;
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains('mathfield')) return;
+      if (fieldTex(t).trim() === '' && t.textContent.trim() === '') {
+        e.preventDefault();
+        var rich = t.closest('.rich-answer');
+        if (t.parentNode) t.parentNode.removeChild(t);
+        if (rich) rich.focus();
       }
     });
 
