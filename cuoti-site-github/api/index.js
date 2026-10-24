@@ -101,99 +101,82 @@ async function writeDBToBlob(db) {
   cachedAt = Date.now();
 }
 
-// ---------------- Redis 逐条存储（并发安全） ----------------
+// ---------------- Redis 逐条存储（直接走 Upstash REST） ----------------
 const R_COLLS = ['users', 'items', 'topics', 'inbox', 'submissions', 'progress'];
 function rHash(name) { return 'cuoti:coll:' + name; }
 const R_SESSIONS = 'cuoti:sessions';
 const R_CONFIG = 'cuoti:config';
 
-function hashToMap(hash) {
+async function redisCmd(args) {
+  const base = String(process.env.KV_REST_API_URL || '').replace(/\/+$/, '');
+  const token = String(process.env.KV_REST_API_TOKEN || '');
+  if (!base || !token) throw new Error('Redis 未配置');
+  const r = await fetch(base, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(args)
+  });
+  const j = await r.json();
+  if (j && j.error) throw new Error(j.error);
+  return j ? j.result : null;
+}
+
+// HGETALL 返回扁平数组 [f1,v1,f2,v2...]
+function pairsToMap(arr) {
   const map = {};
-  if (!hash) return map;
-  if (Array.isArray(hash)) {
-    // 形式1：扁平数组 [f1, v1, f2, v2]
-    if (hash.length && !Array.isArray(hash[0])) {
-      for (let i = 0; i + 1 < hash.length; i += 2) map[String(hash[i])] = hash[i + 1];
-    } else {
-      // 形式2：[[f1, v1], [f2, v2]]
-      hash.forEach(function (pair) {
-        if (pair && pair.length >= 2) map[String(pair[0])] = pair[1];
-      });
-    }
-    return map;
+  if (!Array.isArray(arr)) return map;
+  for (let i = 0; i + 1 < arr.length; i += 2) {
+    map[String(arr[i])] = arr[i + 1];
   }
-  if (hash instanceof Map) {
-    hash.forEach(function (v, k) { map[String(k)] = v; });
-    return map;
-  }
-  Object.keys(hash).forEach(function (k) { map[k] = hash[k]; });
   return map;
 }
 
-function toRecord(raw) {
+function parseRecord(raw) {
   if (raw == null) return null;
-  if (typeof raw === 'object') return raw;       // @vercel/kv 可能已反序列化
-  if (typeof raw === 'string') {
-    try { return JSON.parse(raw); } catch (e) { return null; }
-  }
-  return null;
-}
-
-function mapToRecords(map) {
-  const out = [];
-  Object.keys(map || {}).forEach(function (k) {
-    const v = toRecord(map[k]);
-    if (v && typeof v === 'object') out.push(v);
-  });
-  return out;
-}
-
-function mapToStringValues(map) {
-  const out = {};
-  Object.keys(map || {}).forEach(function (k) {
-    const v = map[k];
-    out[k] = (typeof v === 'string') ? v : JSON.stringify(v);
-  });
-  return out;
+  if (typeof raw === 'object') return raw;
+  try { return JSON.parse(String(raw)); } catch (e) { return null; }
 }
 
 async function readDBRedis() {
-  const kv = require('@vercel/kv').kv;
   const names = R_COLLS;
-  const requests = names.map(function (name) { return kv.hgetall(rHash(name)); });
-  requests.push(kv.hgetall(R_SESSIONS));
-  requests.push(kv.get(R_CONFIG));
-  const res = await Promise.all(requests);
+  const results = await Promise.all(names.map(function (name) {
+    return redisCmd(['HGETALL', rHash(name)]);
+  }).concat([
+    redisCmd(['HGETALL', R_SESSIONS]),
+    redisCmd(['GET', R_CONFIG])
+  ]));
 
   const db = emptyDB();
   const snap = { colls: {}, sessions: {}, config: null };
 
   for (let i = 0; i < names.length; i++) {
-    const name = names[i];
-    const map = mapToStringValues(hashToMap(res[i])); // 统一成字符串快照，方便 diff
-    db[name] = mapToRecords(map);
-    snap.colls[name] = map;
+    const map = pairsToMap(results[i]);
+    const list = [];
+    Object.keys(map).forEach(function (k) {
+      const rec = parseRecord(map[k]);
+      if (rec && typeof rec === 'object') list.push(rec);
+    });
+    db[names[i]] = list;
+    snap.colls[names[i]] = map;
   }
 
-  const sessMap = mapToStringValues(hashToMap(res[names.length]));
+  const sessMap = pairsToMap(results[names.length]);
   db.sessions = {};
   Object.keys(sessMap).forEach(function (token) {
-    const v = toRecord(sessMap[token]);
+    const v = parseRecord(sessMap[token]);
     if (v) db.sessions[token] = v;
   });
   snap.sessions = sessMap;
 
-  const cfg = res[names.length + 1];
-  const cfgObj = toRecord(cfg);
-  if (cfgObj && typeof cfgObj === 'object') db.config = Object.assign(db.config, cfgObj);
-  snap.config = cfgObj ? JSON.stringify(cfgObj) : null;
+  const cfgRec = parseRecord(results[names.length + 1]);
+  if (cfgRec && typeof cfgRec === 'object') db.config = Object.assign(db.config, cfgRec);
+  snap.config = cfgRec ? JSON.stringify(cfgRec) : null;
 
   db.__snap = snap;
   return db;
 }
 
 async function writeDBRedis(db) {
-  const kv = require('@vercel/kv').kv;
   const snap = db.__snap || { colls: {}, sessions: {}, config: null };
   const ops = [];
 
@@ -205,10 +188,10 @@ async function writeDBRedis(db) {
       if (!rec || !rec.id) return;
       const json = JSON.stringify(rec);
       cur[rec.id] = json;
-      if (prev[rec.id] !== json) ops.push(['hset', rHash(name), rec.id, json]);
+      if (prev[rec.id] !== json) ops.push(['HSET', rHash(name), rec.id, json]);
     });
     Object.keys(prev).forEach(function (id) {
-      if (!(id in cur)) ops.push(['hdel', rHash(name), id]);
+      if (!(id in cur)) ops.push(['HDEL', rHash(name), id]);
     });
     snap.colls[name] = cur;
   });
@@ -219,26 +202,18 @@ async function writeDBRedis(db) {
   Object.keys(sess).forEach(function (token) {
     const json = JSON.stringify(sess[token]);
     curS[token] = json;
-    if (prevS[token] !== json) ops.push(['hset', R_SESSIONS, token, json]);
+    if (prevS[token] !== json) ops.push(['HSET', R_SESSIONS, token, json]);
   });
   Object.keys(prevS).forEach(function (token) {
-    if (!(token in curS)) ops.push(['hdel', R_SESSIONS, token]);
+    if (!(token in curS)) ops.push(['HDEL', R_SESSIONS, token]);
   });
   snap.sessions = curS;
 
   const cfgJson = JSON.stringify(db.config || {});
-  if (cfgJson !== snap.config) { ops.push(['set', R_CONFIG, db.config || {}]); snap.config = cfgJson; }
+  if (cfgJson !== snap.config) { ops.push(['SET', R_CONFIG, cfgJson]); snap.config = cfgJson; }
 
-  // 执行（逐条原子，并发时不会互相覆盖整库）
   for (let i = 0; i < ops.length; i++) {
-    const op = ops[i];
-    if (op[0] === 'hset') {
-      const obj = {};
-      obj[op[2]] = op[3];
-      await kv.hset(op[1], obj);
-    }
-    else if (op[0] === 'hdel') await kv.hdel(op[1], op[2]);
-    else if (op[0] === 'set') await kv.set(op[1], op[2]);
+    await redisCmd(ops[i]);
   }
   db.__snap = snap;
 }
