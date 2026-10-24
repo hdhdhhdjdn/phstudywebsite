@@ -301,10 +301,24 @@
     }
   }
   function hydrateImages(container) {
-    $$('img[data-img]', container).forEach(function (img) {
+    $('img[data-img]', container).forEach(function (img) {
       var id = img.getAttribute('data-img');
+      img.onerror = function () {
+        img.removeAttribute('data-img');
+        img.classList.add('img-missing');
+        img.alt = '图片已丢失（点击「编辑」重新上传）';
+        var wrap = img.parentNode;
+        if (wrap && wrap.classList) wrap.classList.add('thumb-broken');
+      };
       getImageUrl(id).then(function (url) {
-        if (!url) { img.removeAttribute('data-img'); return; }
+        if (!url) {
+          img.removeAttribute('data-img');
+          img.classList.add('img-missing');
+          img.alt = '图片已丢失（点击「编辑」重新上传）';
+          var wrap2 = img.parentNode;
+          if (wrap2 && wrap2.classList) wrap2.classList.add('thumb-broken');
+          return;
+        }
         img.src = url;
       });
     });

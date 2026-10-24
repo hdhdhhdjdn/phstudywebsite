@@ -628,3 +628,14 @@ main { margin: 0 0 0 238px; max-width: 1180px; padding: 34px 42px 90px; }
 .q-part .q-text-sub { margin: 0; }
 .q-part .inline-answer-text { width: 100%; background: #fff; }
 .part-actions { margin-top: 6px; }
+/* 图片丢失占位 */
+.thumb.thumb-broken {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 140px; min-height: 60px; padding: 10px 14px;
+  background: #fff4f4; border: 1px dashed #e6a3a3; border-radius: 10px;
+}
+.thumb.thumb-broken img { display: none; }
+.thumb.thumb-broken::after {
+  content: "🖼 图片已丢失，点「编辑」重新上传";
+  font-size: 12.5px; color: #b4453c;
+}
