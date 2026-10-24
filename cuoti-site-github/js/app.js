@@ -2875,7 +2875,8 @@
     function next() {
       if (i >= todo.length) {
         toast('分类完成：' + done + ' / ' + todo.length, 'ok');
-        bootData().then(function () { renderCurrent(); });
+        bootData().then(function () {
+    startAutoSync(); renderCurrent(); });
         return;
       }
       var it = todo[i++];
@@ -2888,6 +2889,92 @@
       });
     }
     next();
+  }
+
+  // ---------- 导入选题 ----------
+  function openPickModal(itemId, questions) {
+    state.pick = { itemId: itemId, questions: questions, selected: questions.map(function (_, i) { return i; }) };
+    var box = $('#pick-list');
+    if (box) {
+      box.innerHTML = questions.map(function (q, i) {
+        var first = String(q || '').split('\n').slice(0, 2).join(' ').slice(0, 90);
+        return '<div class="pick-item"><span class="pick-no">第 ' + (i + 1) + ' 题</span>' +
+          '<span class="pick-text">' + esc(first) + '</span></div>';
+      }).join('');
+    }
+    var inp = $('#pick-nums');
+    if (inp) inp.value = '';
+    showModal('modal-pick');
+  }
+
+  function pickSelectedIndices() {
+    var total = (state.pick && state.pick.questions.length) || 0;
+    var inp = $('#pick-nums');
+    var val = inp ? inp.value.trim() : '';
+    if (!val) {
+      var all = [];
+      for (var k = 0; k < total; k++) all.push(k);
+      return all;   // 留空 = 全部导入
+    }
+    if (val) {
+      var nums = val.split(/[,，\s]+/).map(function (x) { return parseInt(x, 10); }).filter(function (x) { return !isNaN(x); });
+      var total = (state.pick && state.pick.questions.length) || 0;
+      var out = [];
+      nums.forEach(function (x) {
+        var idx = Math.min(total, Math.max(1, x)) - 1;
+        if (idx >= 0 && out.indexOf(idx) < 0) out.push(idx);
+      });
+      return out;
+    }
+    var boxes = $$('#pick-list input[data-pick-i]');
+    return boxes.filter(function (b) { return b.checked; }).map(function (b) { return parseInt(b.getAttribute('data-pick-i'), 10); });
+  }
+
+  function importPickedQuestions() {
+    var ctx = state.pick;
+    if (!ctx) return;
+    var idxs = pickSelectedIndices();
+    if (!idxs.length) { toast('至少选一道题', 'err'); return; }
+    var it = byId(state.items, 'id', ctx.itemId);
+    if (!it) { toast('原题不存在', 'err'); return; }
+    var qs = ctx.questions;
+    it.question = qs[idxs[0]] || it.question;
+    it.updatedAt = new Date().toISOString();
+    var chain = DataStore.put('items', it);
+    idxs.slice(1).forEach(function (i) {
+      chain = chain.then(function () {
+        return DataStore.put('items', {
+          id: uid(), subject: it.subject, date: it.date, difficulty: it.difficulty,
+          source: it.source, topics: [], causes: [], question: qs[i], imageIds: [],
+          status: 'new', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+        });
+      });
+    });
+    chain.then(function () { return bootData(); }).then(function () {
+      closeModal('modal-pick');
+      renderCurrent();
+      toast('已导入 ' + idxs.length + ' 道大题', 'ok');
+      state.pick = null;
+    }).catch(function (e) { toast('导入失败：' + (e && e.message ? e.message : e), 'err'); });
+  }
+
+  // ---------- 题库自动同步（不用刷新） ----------
+  var AUTO_SYNC_TIMER = null;
+  function startAutoSync() {
+    if (AUTO_SYNC_TIMER) return;
+    AUTO_SYNC_TIMER = setInterval(function () {
+      if (!state.cloud || !state.me) return;
+      var ae = document.activeElement;
+      if (ae && (ae.tagName === 'MATH-FIELD' || ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT')) return;
+      if (document.querySelector('.modal:not(.hidden)')) return;
+      Cloud.bootstrap().then(function (data) {
+        var before = (state.items || []).map(function (x) { return x.id + ':' + (x.updatedAt || ''); }).join('|');
+        if (data && data.me) state.me = data.me;
+        applyCollections(data || {});
+        var after = (state.items || []).map(function (x) { return x.id + ':' + (x.updatedAt || ''); }).join('|');
+        if (after !== before) { buildFilters(); renderCurrent(); }
+      }).catch(function () {});
+    }, 15000);
   }
 
   function splitIntoItems(itemId, questions) {
@@ -2931,7 +3018,7 @@
     Cloud.transcribe(itemId).then(function (res) {
       return bootData().then(function () {
         if (res && Array.isArray(res.questions) && res.questions.length > 1) {
-          splitIntoItems(itemId, res.questions);
+          openPickModal(itemId, res.questions);
           return;
         }
         if (res && res.keptOld) {
@@ -3669,6 +3756,10 @@
       }
       if (action === 'close-math-token') { closeModal('modal-math-token'); return; }
       if (action === 'save-math-token') { saveMathToken(); return; }
+      if (action === 'close-pick') { closeModal('modal-pick'); state.pick = null; return; }
+      if (action === 'pick-import') { importPickedQuestions(); return; }
+      if (action === 'pick-all') { $$('#pick-list input[data-pick-i]').forEach(function (b) { b.checked = true; }); var pi = $('#pick-nums'); if (pi) pi.value = ''; return; }
+      if (action === 'pick-none') { $$('#pick-list input[data-pick-i]').forEach(function (b) { b.checked = false; }); return; }
       if (action === 'toggle-card') {
         state.expanded = state.expanded || {};
         var cardEl = el.closest('article.item-card');
@@ -3808,6 +3899,7 @@
       if (action === 'clear-all') { clearAll(); return; }
       if (action === 'refresh') {
         bootData().then(function () {
+    startAutoSync();
           rebuildFilters();
           renderCurrent();
           toast('已刷新', 'ok');

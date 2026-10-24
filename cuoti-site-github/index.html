@@ -296,6 +296,27 @@
   </div>
 </div>
 
+<!-- ============ 导入选题 ============ -->
+<div id="modal-pick" class="modal hidden">
+  <div class="modal-mask" data-action="close-pick"></div>
+  <div class="modal-box wide">
+    <div class="modal-head">
+      <h2>识别到多道大题</h2>
+      <button class="icon-btn" data-action="close-pick" title="关闭">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted">勾选要导入的题号；也可以直接输入题号（如 1,3,5）。</p>
+      <label class="field"><span>题号</span><input id="pick-nums" placeholder="例如：1,3,5（留空=全部）"></label>
+      <div id="pick-list" class="pick-list"></div>
+      <div class="btn-row" style="margin-top:10px">
+        <span class="grow"></span>
+        <button class="btn ghost" data-action="close-pick">取消</button>
+        <button class="btn primary" data-action="pick-import">导入所选</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ============ 编辑公式片段 ============ -->
 <div id="modal-math-token" class="modal hidden">
   <div class="modal-mask" data-action="close-math-token"></div>

@@ -875,3 +875,9 @@ math-field.mathfield::part(placeholder),
 math-field.mathfield .ML__placeholder { color: #7aa7ff; }
 /* MathLive 空位/占位可见 */
 math-field.mathfield { --ml-placeholder-color: #2b6cb0; }
+/* 导入选题弹窗 */
+.pick-list { max-height: 280px; overflow-y: auto; margin-top: 10px; border: 1px solid #e3e9f2; border-radius: 8px; padding: 6px; }
+.pick-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px; border-radius: 6px; cursor: pointer; }
+.pick-item:hover { background: #f4f8ff; }
+.pick-no { flex: none; font-weight: 600; color: #1b64d1; }
+.pick-text { color: #3b4657; font-size: 13px; line-height: 1.5; }
