@@ -975,13 +975,101 @@
   }
 
   // 把原始写法转成 LaTeX
+  // 按规则把用户输入转成 LaTeX 结构：
+  //  1) a^(1/2)  -> 整个括号是指数
+  //  2) a^1/2    -> 只有 1 是指数，再除以 2
+  //  3) 空格后接符号（如 "a+b /2"）-> 前面整段作为一组
+  function smartLatex(raw) {
+    var src = String(raw || '').replace(/\u00a0/g, ' ').trim();
+    if (!src) return '';
+
+    function readGroup(str, i) { // str[i] === '('
+      var depth = 0, start2 = i;
+      for (; i < str.length; i++) {
+        if (str[i] === '(') depth++;
+        else if (str[i] === ')') { depth--; if (depth === 0) return { inner: str.slice(start2 + 1, i), next: i + 1 }; }
+      }
+      return { inner: str.slice(start2 + 1), next: str.length };
+    }
+    function atom(str, i) {
+      var ch = str[i];
+      if (ch === '(') {
+        var g = readGroup(str, i);
+        return { tex: '\\left(' + smartLatex(g.inner) + '\\right)', next: g.next };
+      }
+      if (ch === '\\') { // 反斜杠命令整体保留
+        var j = i + 1;
+        while (j < str.length && /[A-Za-z]/.test(str[j])) j++;
+        return { tex: str.slice(i, j), next: j };
+      }
+      return { tex: ch, next: i + 1 };
+    }
+    function withScript(base, str, i) { // base 后可能有 ^ / _
+      var tex = base;
+      while (i < str.length && (str[i] === '^' || str[i] === '_')) {
+        var mark = str[i] === '^' ? '^' : '_';
+        i++;
+        var script = '';
+        if (str[i] === '(') {
+          // 括号：整个括号内容作为指数/下标
+          var g = readGroup(str, i);
+          script = smartLatex(g.inner);
+          i = g.next;
+        } else if (/[0-9]/.test(str[i] || '')) {
+          // 连续数字整体作为指数（如 a^12）
+          var num = '';
+          while (i < str.length && /[0-9.]/.test(str[i])) { num += str[i]; i++; }
+          script = num;
+        } else {
+          var e = atom(str, i);
+          script = e.tex;
+          i = e.next;
+        }
+        tex += mark + '{' + script + '}';
+      }
+      return { tex: tex, next: i };
+    }
+
+    function term(str) {
+      var out = '', i = 0;
+      while (i < str.length) {
+        var a = atom(str, i);
+        var b = withScript(a.tex, str, a.next);
+        i = b.next;
+        // 紧跟着的 / 只作用于当前这个原子
+        if (str[i] === '/') {
+          var c = atom(str, i + 1);
+          var c2 = withScript(c.tex, str, c.next);
+          i = c2.next;
+          out += '\\frac{' + b.tex + '}{' + c2.tex + '}';
+        } else {
+          out += b.tex;
+        }
+      }
+      return out;
+    }
+
+    // 先按空格切分；以运算符开头的片段表示"前面整段作为一组"
+    var parts = src.split(/\s+/).filter(Boolean);
+    var built = '';
+    parts.forEach(function (part) {
+      var m = part.match(/^([+\-*\/=×÷])([\s\S]*)$/);
+      if (m) {
+        var op = m[1], rest = m[2];
+        var restTex = term(rest);
+        if (op === '/' && rest) built = '\\frac{' + built + '}{' + restTex + '}';
+        else if (op === '×' || op === '*') built = built + ' \\cdot ' + restTex;
+        else if (op === '÷') built = '\\frac{' + built + '}{' + restTex + '}';
+        else built = built + ' ' + op + ' ' + restTex;
+      } else {
+        built = built ? (built + ' ' + term(part)) : term(part);
+      }
+    });
+    return built.replace(/\s+/g, ' ').trim();
+  }
+
   function rawToLatex(raw) {
-    var t = String(raw || '');
-    t = t.replace(/([A-Za-z0-9)\]]+)\^\{?([^{}\s]+)\}?/g, '$1^{$2}');
-    t = t.replace(/([A-Za-z0-9)\]]+)_\{?([^{}\s]+)\}?/g, '$1_{$2}');
-    t = t.replace(/([A-Za-z0-9)\]]+)\/([A-Za-z0-9)\]]+)/g, '\\frac{$1}{$2}');
-    t = t.replace(/×/g, '\\times ').replace(/÷/g, '\\div ');
-    return t;
+    return smartLatex(raw);
   }
 
   function updateMathFieldRender(field) {
