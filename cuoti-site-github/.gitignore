@@ -1,0 +1,18 @@
+# 运行数据：账号、密码哈希、AI 密钥、上传的图片（绝不能提交）
+cloud-data/
+uploads/
+
+# 日志
+*.log
+
+# 构建产物
+错题站.html
+错题站-*.zip
+
+# 依赖
+node_modules/
+
+# 系统文件
+Thumbs.db
+.DS_Store
+desktop.ini

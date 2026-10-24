@@ -1,0 +1,13 @@
+# 部署到 Vercel 时忽略的文件（不会上传）
+cloud-data
+test
+deploy
+node_modules
+*.cmd
+*.vbs
+*.log
+*.zip
+cloud-server.js
+server.js
+错题站.html
+使用说明.md

@@ -45,9 +45,6 @@
     submissions: [],
     progress: {},
     answerImages: {},
-    formulaTarget: null,
-    fqTab: 'num',
-    fqHistory: [],
     cloud: false,
     me: null,
     tab: 'items',
@@ -596,40 +593,6 @@
     }).sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
   }
 
-  // 把题干拆成「主题干 / 小题部分」，用于把图片放在主题干下方
-  function splitStem(text) {
-    var t = String(text || '');
-    if (!t) return { stem: '', rest: '' };
-    var lines = t.split('\n');
-    if (lines.length < 2) return { stem: t, rest: '' };
-    var subRe = /^\s*(?:\(?[a-dA-D][\).、]?\s+|\d+[\).]\s*)\S/;
-    for (var i = 1; i < lines.length; i++) {
-      if (subRe.test(lines[i])) return { stem: lines.slice(0, i).join('\n'), rest: lines.slice(i).join('\n') };
-    }
-    return { stem: t, rest: '' };
-  }
-
-  // 识别多小题（a、b、c…），返回 [{label, body}]；选择题的 A/B/C/D 不算
-  function questionParts(text) {
-    var sp = splitStem(text || '');
-    if (!sp.rest) return [];
-    var out = [];
-    var cur = null;
-    sp.rest.split('\n').forEach(function (ln) {
-      var m = ln.match(/^\s*\(?([a-d])[\).、]?\s+(.*)$/);
-      if (m) {
-        cur = { label: m[1], body: m[2] };
-        out.push(cur);
-      } else if (cur) {
-        cur.body += '\n' + ln;
-      }
-    });
-    if (out.length < 2) return [];
-    // 只认以小写 a、b 开头的多小题（避免把选择题选项当小题）
-    if (out[0].label !== 'a' || out[1].label !== 'b') return [];
-    return out.map(function (x) { return { label: x.label, body: String(x.body || '').trim() }; });
-  }
-
   function itemCardHTML(it) {
     var topicChips = (it.topics || []).map(function (id) {
       return '<span class="badge topic" data-action="filter-topic" data-topic="' + esc(id) + '">' + esc(topicName(id)) + '</span>';
@@ -723,44 +686,6 @@
         '</div>';
     }
 
-    var __parts = questionParts(it.question || '');
-    var __hasImg = (it.imageIds || []).length > 0;
-    var __split = splitStem(it.question || '');
-    var __multipart = __parts.length > 0;
-    var answerInputsHTML = '<textarea class="inline-answer-text" rows="3" placeholder="在这里写答案 / 解题过程；画图题可上传手写或绘图"></textarea>';
-
-    function __actionRow() {
-      return '<div class="inline-answer-actions part-actions">' +
-        '<label class="btn tiny">📷 手写/绘图<input type="file" class="answer-file" accept="image/*" multiple data-id="' + esc(it.id) + '" hidden></label>' +
-        '<button class="btn tiny" data-action="open-formula" data-id="' + esc(it.id) + '">∑ 插入公式</button>' +
-        '<span class="answer-thumbs" id="athumb-' + esc(it.id) + '"></span>' +
-        '<span class="grow"></span>' +
-        '<button class="btn tiny primary" data-action="submit-inline-answer" data-id="' + esc(it.id) + '">提交作答</button>' +
-      '</div>';
-    }
-
-    var questionHTML = '';
-    if (__multipart) {
-      // 每个小题：小题文字 → 紧跟该小题的答题框
-      questionHTML = (__split.stem ? '<div class="q-text">' + renderMathText(__split.stem) + '</div>' : '') +
-        thumbsBlock +
-        __parts.map(function (p) {
-          return '<div class="q-part">' +
-            '<div class="q-text q-text-sub">(' + esc(p.label) + ') ' + renderMathText(p.body) + '</div>' +
-            '<textarea class="inline-answer-text" rows="2" data-part="' + esc(p.label) + '" placeholder="第 (' + esc(p.label) + ') 小题的答案 / 过程"></textarea>' +
-          '</div>';
-        }).join('') +
-        __actionRow();
-    } else if (it.question) {
-      if (__hasImg && __split.rest) {
-        questionHTML = '<div class="q-text">' + renderMathText(__split.stem) + '</div>' + thumbsBlock +
-          '<div class="q-text q-text-sub">' + renderMathText(__split.rest) + '</div>';
-      } else {
-        questionHTML = '<div class="q-text">' + renderMathText(it.question) + '</div>' + thumbsBlock;
-      }
-    } else {
-      questionHTML = thumbsBlock;
-    }
     return '<article class="card item-card" data-id="' + esc(it.id) + '">' +
       '<div class="item-head">' +
         '<span class="badge ' + subjectClass(it.subject) + '">' + esc(it.subject || '其他') + '</span>' +
@@ -770,7 +695,7 @@
         ownerChip +
         '<span class="grow"></span>' +
         (canEdit ? '<button class="link" data-action="toggle-mastered" data-id="' + esc(it.id) + '">' + (mastered ? '取消已掌握' : '标记已掌握') + '</button>' : '') +
-        (__multipart ? '' : '<button class="link" data-action="toggle-answer-box" data-id="' + esc(it.id) + '">✍️ 作答</button>') +
+        '<button class="link" data-action="toggle-answer-box" data-id="' + esc(it.id) + '">✍️ 作答</button>' +
         ((canEdit && state.cloud && typeof Cloud !== 'undefined' && Cloud.health && Cloud.health.autoGrade && (it.imageIds || []).length)
           ? '<button class="link" data-action="transcribe-item" data-id="' + esc(it.id) + '">🔤 转文字</button>'
           : '') +
@@ -786,22 +711,21 @@
         (canEdit ? '<button class="link" data-action="edit-item" data-id="' + esc(it.id) + '">编辑</button>' : '') +
         (canEdit ? '<button class="link danger" data-action="delete-item" data-id="' + esc(it.id) + '">删除</button>' : '') +
       '</div>' +
-      questionHTML +
+      (it.question ? '<div class="q-text">' + renderMathText(it.question) + '</div>' : '') +
+      thumbsBlock +
       ((topicChips || causeChips || msChip || answeredChip) ? '<div class="chips">' + topicChips + causeChips + msChip + answeredChip + '</div>' : '') +
       answerHTML +
       gradeHTML +
-      (__multipart ? '' :
       '<div class="inline-answer hidden" id="ansbox-' + esc(it.id) + '">' +
-        answerInputsHTML +
+        '<textarea class="inline-answer-text" rows="3" placeholder="在这里写答案 / 解题过程；画图题可上传手写或绘图"></textarea>' +
         '<div class="inline-answer-actions">' +
           '<label class="btn tiny">📷 手写/绘图<input type="file" class="answer-file" accept="image/*" multiple data-id="' + esc(it.id) + '" hidden></label>' +
-          '<button class="btn tiny" data-action="open-formula" data-id="' + esc(it.id) + '">∑ 插入公式</button>' +
           '<span class="answer-thumbs" id="athumb-' + esc(it.id) + '"></span>' +
           '<span class="grow"></span>' +
           '<button class="btn tiny" data-action="cancel-inline-answer" data-id="' + esc(it.id) + '">取消</button>' +
           '<button class="btn tiny primary" data-action="submit-inline-answer" data-id="' + esc(it.id) + '">提交作答</button>' +
         '</div>' +
-      '</div>') +
+      '</div>' +
       (it.note ? '<div class="mine-line">📝 ' + esc(it.note) + '</div>' : '') +
     '</article>';
   }
@@ -1090,13 +1014,6 @@
       renderCurrent();
       refreshReviewCounts();
       toast('已保存', 'ok');
-      // 新上传且带图片、题干为空 → 自动转文字（转完会自动裁剪图形）
-      if ((it.imageIds || []).length && !(it.question || '').trim() && state.cloud &&
-          typeof Cloud !== 'undefined' && Cloud.health && Cloud.health.autoGrade) {
-        setTimeout(function () {
-          if (byId(state.items, 'id', it.id)) transcribeItem(it.id);
-        }, 400);
-      }
     }).catch(function (e) {
       console.error(e);
       toast('保存失败：' + (e && e.message ? e.message : e), 'err');
@@ -1486,159 +1403,6 @@
     }).catch(function (e) { toast('还原失败：' + (e && e.message ? e.message : e), 'err'); });
   }
 
-  // ---------- 公式编辑器（作答框插入 LaTeX） ----------
-  // ---------- 公式键盘数据（参考 SaveMyExams 分页键盘） ----------
-  var FQ_QUICK = [
-    { l: '分式', v: '\\frac{}{}' },
-    { l: '上标', v: '^{}' },
-    { l: '下标', v: '_{}' },
-    { l: '根号', v: '\\sqrt{}' },
-    { l: '求导', v: '\\frac{dy}{dx}' },
-    { l: '积分', v: '\\int_{}^{}\\,dx' },
-    { l: '联立方程', v: '\\begin{cases}  \\\\  \\end{cases}' }
-  ];
-  var FQ_TABS = [
-    { id: 'num', label: '123', keys: [
-      { l: 'x', v: 'x' }, { l: 'n', v: 'n', hint: 'a' }, { l: '7', v: '7' }, { l: '8', v: '8' }, { l: '9', v: '9' }, { l: '÷', v: '\\div' },
-      { l: '<', v: '<' }, { l: '>', v: '>' }, { l: '4', v: '4' }, { l: '5', v: '5' }, { l: '6', v: '6' }, { l: '×', v: '\\times' },
-      { l: '(', v: '(' }, { l: ')', v: ')' }, { l: '1', v: '1' }, { l: '2', v: '2' }, { l: '3', v: '3' }, { l: '−', v: '-' },
-      { l: '0', v: '0' }, { l: '.', v: '.' }, { l: '=', v: '=' }, { l: '+', v: '+' }
-    ] },
-    { id: 'sym', label: '∞≠∈', keys: [
-      { l: '∞', v: '\\infty' }, { l: '≠', v: '\\neq' }, { l: '≤', v: '\\leq' }, { l: '≥', v: '\\geq' }, { l: '≈', v: '\\approx' }, { l: '±', v: '\\pm' },
-      { l: '∈', v: '\\in' }, { l: '∉', v: '\\notin' }, { l: '∪', v: '\\cup' }, { l: '∩', v: '\\cap' }, { l: '⊂', v: '\\subset' }, { l: '⊃', v: '\\supset' },
-      { l: '∀', v: '\\forall' }, { l: '∃', v: '\\exists' }, { l: '→', v: '\\to' }, { l: '←', v: '\\leftarrow' }, { l: '↔', v: '\\leftrightarrow' }, { l: '⇒', v: '\\Rightarrow' },
-      { l: '∫', v: '\\int' }, { l: 'Σ', v: '\\sum' }, { l: 'π', v: '\\pi' }, { l: '°', v: '^\\circ' }, { l: '∠', v: '\\angle' }, { l: '△', v: '\\triangle' },
-      { l: '⋅', v: '\\cdot' }, { l: '√', v: '\\sqrt{}' }, { l: '|x|', v: '\\left| \\right|' }, { l: 'lim', v: '\\lim_{}' }, { l: 'sin', v: '\\sin' }, { l: 'cos', v: '\\cos' },
-      { l: 'tan', v: '\\tan' }, { l: 'log', v: '\\log' }, { l: 'ln', v: '\\ln' }, { l: 'exp', v: '\\exp' }, { l: 'd/dx', v: '\\frac{d}{dx}' }, { l: '∂', v: '\\partial' }
-    ] },
-    { id: 'abc', label: 'abc', keys: [
-      { l: 'a', v: 'a' }, { l: 'b', v: 'b' }, { l: 'c', v: 'c' }, { l: 'd', v: 'd' }, { l: 'e', v: 'e' }, { l: 'f', v: 'f' },
-      { l: 'g', v: 'g' }, { l: 'h', v: 'h' }, { l: 'i', v: 'i' }, { l: 'j', v: 'j' }, { l: 'k', v: 'k' }, { l: 'l', v: 'l' },
-      { l: 'm', v: 'm' }, { l: 'n', v: 'n' }, { l: 'o', v: 'o' }, { l: 'p', v: 'p' }, { l: 'q', v: 'q' }, { l: 'r', v: 'r' },
-      { l: 's', v: 's' }, { l: 't', v: 't' }, { l: 'u', v: 'u' }, { l: 'v', v: 'v' }, { l: 'w', v: 'w' }, { l: 'x', v: 'x' },
-      { l: 'y', v: 'y' }, { l: 'z', v: 'z' }, { l: 'Δx', v: '\\Delta x' }, { l: 'dx', v: '\\,dx' }
-    ] },
-    { id: 'greek', label: 'αβγ', keys: [
-      { l: 'α', v: '\\alpha' }, { l: 'β', v: '\\beta' }, { l: 'γ', v: '\\gamma' }, { l: 'δ', v: '\\delta' }, { l: 'ε', v: '\\epsilon' }, { l: 'ζ', v: '\\zeta' },
-      { l: 'η', v: '\\eta' }, { l: 'θ', v: '\\theta' }, { l: 'ι', v: '\\iota' }, { l: 'κ', v: '\\kappa' }, { l: 'λ', v: '\\lambda' }, { l: 'μ', v: '\\mu' },
-      { l: 'ν', v: '\\nu' }, { l: 'ξ', v: '\\xi' }, { l: 'π', v: '\\pi' }, { l: 'ρ', v: '\\rho' }, { l: 'σ', v: '\\sigma' }, { l: 'τ', v: '\\tau' },
-      { l: 'υ', v: '\\upsilon' }, { l: 'φ', v: '\\phi' }, { l: 'χ', v: '\\chi' }, { l: 'ψ', v: '\\psi' }, { l: 'ω', v: '\\omega' },
-      { l: 'Γ', v: '\\Gamma' }, { l: 'Δ', v: '\\Delta' }, { l: 'Θ', v: '\\Theta' }, { l: 'Λ', v: '\\Lambda' }, { l: 'Σ', v: '\\Sigma' },
-      { l: 'Φ', v: '\\Phi' }, { l: 'Ψ', v: '\\Psi' }, { l: 'Ω', v: '\\Omega' }
-    ] },
-    { id: 'matrix', label: 'Matrices', keys: [
-      { l: '□ □', v: '\\begin{matrix}  &  \\\\  &  \\end{matrix}' },
-      { l: '(□ □)', v: '\\begin{pmatrix}  &  \\\\  &  \\end{pmatrix}' },
-      { l: '[□ □]', v: '\\begin{bmatrix}  &  \\\\  &  \\end{bmatrix}' },
-      { l: '{□ □}', v: '\\begin{Bmatrix}  &  \\\\  &  \\end{Bmatrix}' },
-      { l: '|□ □|', v: '\\begin{vmatrix}  &  \\\\  &  \\end{vmatrix}' },
-      { l: '‖□ □‖', v: '\\begin{Vmatrix}  &  \\\\  &  \\end{Vmatrix}' }
-    ] }
-  ];
-
-  function fqRenderAll() {
-    var quick = $('#formula-quick');
-    if (quick) {
-      quick.innerHTML = FQ_QUICK.map(function (k) {
-        return '<button class="fq-key quick" data-fq="' + esc(k.v) + '">' + esc(k.l) + '</button>';
-      }).join('');
-    }
-    state.fqTab = state.fqTab || 'num';
-    fqRenderTabs(state.fqTab);
-    fqRenderPad(state.fqTab);
-  }
-
-  function fqRenderTabs(active) {
-    var box = $('#formula-tabs');
-    if (!box) return;
-    box.innerHTML = FQ_TABS.map(function (t) {
-      return '<button class="fq-tab' + (t.id === active ? ' active' : '') + '" data-fqtab="' + t.id + '">' + esc(t.label) + '</button>';
-    }).join('');
-  }
-
-  function fqRenderPad(tabId) {
-    var box = $('#formula-pad');
-    if (!box) return;
-    var tab = null;
-    for (var i = 0; i < FQ_TABS.length; i++) if (FQ_TABS[i].id === tabId) tab = FQ_TABS[i];
-    if (!tab) tab = FQ_TABS[0];
-    box.innerHTML = tab.keys.map(function (k) {
-      return '<button class="fq-key" data-fq="' + esc(k.v) + '">' +
-        (k.hint ? '<span class="fq-hint">' + esc(k.hint) + '</span>' : '') +
-        '<span class="fq-label">' + esc(k.l) + '</span></button>';
-    }).join('');
-  }
-
-  function fqPushHistory() {
-    var ta = $('#formula-input');
-    if (!ta) return;
-    state.fqHistory = state.fqHistory || [];
-    state.fqHistory.push(ta.value);
-    if (state.fqHistory.length > 50) state.fqHistory.shift();
-  }
-
-  function openFormulaEditor(itemId) {
-    state.formulaTarget = itemId;
-    var ta = $('#formula-input');
-    if (ta) ta.value = '';
-    state.fqHistory = [];
-    var ae = document.activeElement;
-    state.fqTargetEl = (ae && ae.classList && ae.classList.contains('inline-answer-text')) ? ae : null;
-    fqRenderAll();
-    renderFormulaPreview();
-    showModal('modal-formula');
-    if (ta) setTimeout(function () { ta.focus(); }, 60);
-  }
-
-  function renderFormulaPreview() {
-    var box = $('#formula-preview');
-    var ta = $('#formula-input');
-    if (!box || !ta) return;
-    var src = ta.value.trim();
-    if (!src) {
-      box.innerHTML = '<span class="muted">公式预览显示在这里</span>';
-      return;
-    }
-    var display = /\\begin\{|\\\\/.test(src);
-    if (typeof window.katex === 'undefined') { box.textContent = src; return; }
-    try {
-      box.innerHTML = window.katex.renderToString(src, { throwOnError: false, displayMode: display, strict: false });
-    } catch (e) {
-      box.textContent = src;
-    }
-  }
-
-  function insertAtCursor(ta, text) {
-    if (!ta) return;
-    var start = ta.selectionStart || 0;
-    var end = ta.selectionEnd || 0;
-    var val = ta.value;
-    ta.value = val.slice(0, start) + text + val.slice(end);
-    var caret = start + text.length;
-    var braceIdx = text.lastIndexOf('{}');
-    if (braceIdx >= 0) caret = start + braceIdx + 1; // 光标放进空花括号
-    ta.focus();
-    try { ta.setSelectionRange(caret, caret); } catch (e) {}
-  }
-
-  function insertFormulaToAnswer() {
-    var input = $('#formula-input');
-    var src = input ? input.value.trim() : '';
-    if (!src) { toast('先输入或点选一个公式', 'err'); return; }
-    var ta = state.fqTargetEl && document.body.contains(state.fqTargetEl) ? state.fqTargetEl : null;
-    if (!ta) {
-      var card = document.querySelector('article.item-card[data-id="' + state.formulaTarget + '"]');
-      ta = card ? card.querySelector('.inline-answer-text') : null;
-    }
-    if (!ta) { toast('找不到作答框，请重新点「✍️ 作答」', 'err'); return; }
-    var display = /\\begin\{|\\\\/.test(src);
-    var snippet = display ? ('$$\n' + src + '\n$$') : ('$' + src + '$');
-    insertAtCursor(ta, snippet);
-    hideModal('modal-formula');
-    toast('公式已插入作答框', 'ok');
-  }
-
   function tagItem(itemId) {
     if (!state.cloud || typeof Cloud === 'undefined') { toast('需要班级服务器模式', 'err'); return; }
     toast('AI 正在判断 IB 知识点…', 'ok');
@@ -1789,20 +1553,10 @@
   function submitInlineAnswer(itemId) {
     var it = byId(state.items, 'id', itemId);
     if (!it) return;
-    var box = document.getElementById('ansbox-' + itemId) ||
-      document.querySelector('article.item-card[data-id="' + itemId + '"]');
+    var box = document.getElementById('ansbox-' + itemId);
     if (!box) return;
-    var tas = Array.prototype.slice.call(box.querySelectorAll('.inline-answer-text'));
-    var partTAs = tas.filter(function (t) { return t.getAttribute('data-part'); });
-    var text = '';
-    if (partTAs.length) {
-      text = partTAs.map(function (t) {
-        var v = (t.value || '').trim();
-        return v ? ('(' + t.getAttribute('data-part') + ') ' + v) : '';
-      }).filter(Boolean).join('\n');
-    } else {
-      text = tas[0] ? tas[0].value.trim() : '';
-    }
+    var ta = box.querySelector('.inline-answer-text');
+    var text = ta ? ta.value.trim() : '';
     var imgs = (state.answerImages[itemId] || []).slice();
     if (!text && !imgs.length) { toast('写点答案，或者上传手写/绘图再提交', 'err'); return; }
 
@@ -1829,8 +1583,8 @@
         sub = saved || sub;
         state.submissions = state.submissions.filter(function (x) { return x.id !== sub.id; }).concat([sub]);
         clearAnswerImages(itemId);
-        tas.forEach(function (t) { t.value = ''; });
-        if (box.id === 'ansbox-' + itemId) box.classList.add('hidden');
+        if (ta) ta.value = '';
+        box.classList.add('hidden');
         if (canAutoGrade()) {
           toast('已提交，AI 批改中…', 'ok');
           if (state.tab === 'answers') renderAnswers();
@@ -2394,9 +2148,6 @@
       if (action === 'edit-item') { openEditor(id); return; }
       if (action === 'delete-item') { deleteItem(id); return; }
       if (action === 'toggle-mastered') { toggleMastered(id); return; }
-      if (action === 'open-formula') { openFormulaEditor(id); return; }
-      if (action === 'close-formula') { hideModal('modal-formula'); return; }
-      if (action === 'insert-formula') { insertFormulaToAnswer(); return; }
       if (action === 'close-editor') { hideModal('modal-editor'); state.editing = null; return; }
       if (action === 'save-item') { saveItem(); return; }
       if (action === 'add-ms') { $('#e-ms').insertAdjacentHTML('beforeend', msRowHTML('', false)); return; }
@@ -2569,60 +2320,6 @@
         if (entry) { entry.subject = t.value; DataStore.put('inbox', entry); }
       }
     });
-
-    // 公式编辑器：分页键盘 + 实时预览
-    document.addEventListener('click', function (e) {
-      if (!e.target || !e.target.closest) return;
-      if (!e.target.closest('#modal-formula')) return;
-
-      var tabBtn = e.target.closest('[data-fqtab]');
-      if (tabBtn) {
-        e.preventDefault();
-        state.fqTab = tabBtn.getAttribute('data-fqtab');
-        fqRenderTabs(state.fqTab);
-        fqRenderPad(state.fqTab);
-        return;
-      }
-
-      var act = e.target.closest('[data-fqact]');
-      if (act) {
-        e.preventDefault();
-        var ta0 = $('#formula-input');
-        if (!ta0) return;
-        var op = act.getAttribute('data-fqact');
-        if (op === 'undo') {
-          if (state.fqHistory && state.fqHistory.length) {
-            ta0.value = state.fqHistory.pop();
-            renderFormulaPreview();
-          }
-        } else if (op === 'backspace') {
-          var st = ta0.selectionStart || 0;
-          if (st > 0) {
-            fqPushHistory();
-            ta0.value = ta0.value.slice(0, st - 1) + ta0.value.slice(ta0.selectionEnd || st);
-            try { ta0.setSelectionRange(st - 1, st - 1); } catch (err) {}
-            renderFormulaPreview();
-          }
-        } else if (op === 'clear') {
-          fqPushHistory();
-          ta0.value = '';
-          renderFormulaPreview();
-        }
-        return;
-      }
-
-      var key = e.target.closest('[data-fq]');
-      if (key) {
-        e.preventDefault();
-        var ta = $('#formula-input');
-        if (!ta) return;
-        fqPushHistory();
-        insertAtCursor(ta, key.getAttribute('data-fq') || '');
-        renderFormulaPreview();
-      }
-    });
-    var fin = $('#formula-input');
-    if (fin) fin.addEventListener('input', renderFormulaPreview);
     (function () {
       var panel = $('#panel-inbox');
       if (!panel) return;
