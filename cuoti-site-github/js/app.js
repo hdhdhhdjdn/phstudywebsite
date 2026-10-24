@@ -554,6 +554,17 @@
   }
 
   // ======================= 错题列表 =======================
+  function clearFilters() {
+    state.filters = { subject: '', topic: '', cause: '', status: '', q: '' };
+    ['#f-subject', '#f-topic', '#f-cause', '#f-status'].forEach(function (sel) {
+      var el = $(sel);
+      if (el) el.value = '';
+    });
+    var q = $('#f-search');
+    if (q) q.value = '';
+    renderItems();
+  }
+
   function filterItems() {
     var f = state.filters;
     var q = (f.q || '').trim().toLowerCase();
@@ -850,7 +861,14 @@
       return;
     }
     if (!list.length) {
-      box.innerHTML = '<div class="empty"><h3>没有符合条件的错题</h3><p>试试清空筛选条件或换关键词。</p></div>';
+      var f = state.filters || {};
+      var active = [];
+      if (f.q) active.push('搜索"<b>' + esc(f.q) + '</b>"');
+      if (f.subject) active.push('科目 ' + esc(f.subject));
+      if (f.status) active.push('状态');
+      box.innerHTML = '<div class="empty"><h3>没有符合条件的错题</h3>' +
+        '<p>' + (active.length ? '当前筛选：' + active.join('、') : '试试换关键词') + '</p>' +
+        '<p><button class="btn primary" data-action="clear-filters">清空筛选条件，显示全部 ' + state.items.length + ' 题</button></p></div>';
       return;
     }
     box.innerHTML = state.groupMode ? groupedHTML(list) : list.map(itemCardHTML).join('');
@@ -1089,6 +1107,13 @@
       rebuildFilters();
       renderCurrent();
       refreshReviewCounts();
+      // 保存后清空筛选，避免新题被过滤掉看不到
+      state.filters = { subject: '', topic: '', cause: '', status: '', q: '' };
+      ['#f-subject', '#f-topic', '#f-cause', '#f-status', '#f-search'].forEach(function (sel) {
+        var el = $(sel);
+        if (el) el.value = '';
+      });
+      renderCurrent();
       toast('已保存', 'ok');
       // 新上传且带图片、题干为空 → 自动转文字（转完会自动裁剪图形）
       if ((it.imageIds || []).length && !(it.question || '').trim() && state.cloud &&
@@ -2390,6 +2415,7 @@
       var id = el.getAttribute('data-id');
 
       if (action === 'tab') { showTab(el.getAttribute('data-tab')); return; }
+      if (action === 'clear-filters') { clearFilters(); return; }
       if (action === 'new-item') { openEditor(null); return; }
       if (action === 'edit-item') { openEditor(id); return; }
       if (action === 'delete-item') { deleteItem(id); return; }
