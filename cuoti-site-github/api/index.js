@@ -492,6 +492,97 @@ async function callGradeAPI(cfg, sub, item, imageMap) {
 }
 
 // ---------------- 图片转文字（OCR） ----------------
+// ---------------- AI 定位图形区域 ----------------
+async function callFigureAPI(cfg, item, imageMap, forceImageId) {
+  const imageIds = (item && item.imageIds) || [];
+  if (!imageIds.length) throw new Error('这道题没有图片');
+  const pickId = (forceImageId && imageIds.indexOf(forceImageId) >= 0) ? forceImageId : imageIds[0];
+  const buf = await readImage((imageMap || {})[pickId]);
+  if (!buf || !buf.length) throw new Error('图片文件不存在');
+  const b64 = buf.toString('base64');
+  const prompt = '这是一道题目图片，可能同时包含题干文字和图形。请找出图形/图表部分的矩形区域，用相对坐标返回（左上角 0,0，右下角 1,1）：{"found":true 或 false,"box":{"x":0.5,"y":0.05,"w":0.45,"h":0.9},"note":"简述图形内容"}。box 必须包住图形、不含题干文字；没有图形时 found 为 false。只输出 JSON。';
+  const url = cfg.gradeBase.replace(/\/+$/, '') + '/chat/completions';
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.gradeKey },
+    body: JSON.stringify({
+      model: cfg.gradeModel,
+      reasoning_effort: /^glm-5/i.test(String(cfg.gradeModel || '')) ? 'low' : undefined,
+      messages: [
+        { role: 'system', content: '你是图像版面分析助手，只输出 JSON。' },
+        { role: 'user', content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64 } }
+        ] }
+      ],
+      temperature: 0.1,
+      max_tokens: 800
+    })
+  });
+  if (!resp.ok) { const t = await resp.text(); throw new Error('接口返回 ' + resp.status + '：' + String(t).slice(0, 200)); }
+  const data = await resp.json();
+  const raw = extractMessageText(data);
+  if (!raw) throw modelEmptyError(data);
+  const parsed = extractJSON(raw) || {};
+  const box = parsed.box || {};
+  const num = function (v) { const x = Number(v); return isFinite(x) ? Math.min(1, Math.max(0, x)) : 0; };
+  return { found: parsed.found === true, box: { x: num(box.x), y: num(box.y), w: num(box.w), h: num(box.h) }, note: String(parsed.note || '') };
+}
+
+// ---------------- 单小题求解/批改 ----------------
+async function callSolvePartAPI(cfg, item, partLabel, partText, answerText, imageMap, answerImageIds) {
+  const parts = [];
+  parts.push('你是 IB DP 老师。下面是同一道大题里的一个小题，请作答并批改。');
+  if (item.question) parts.push('【整道题】\n' + item.question);
+  parts.push('【本小题】(' + partLabel + ') ' + (partText || ''));
+  parts.push(answerText ? ('【学生作答】\n' + answerText) : '（学生未作答，只需要标准答案）');
+  parts.push('要求：先给出该小题的标准答案（含关键步骤），如学生进行了作答则逐点判分；只输出 JSON：{"standardAnswer":"...","points":[{"point":"...","max":1,"awarded":0,"comment":"..."}],"score":0,"fullMarks":1,"comment":"..."}');
+  const imageIds = (item && item.imageIds) || [];
+  const content = [{ type: 'text', text: parts.join('\n\n') }];
+  for (let i = 0; i < Math.min(imageIds.length, 2); i++) {
+    const buf = await readImage((imageMap || {})[imageIds[i]]);
+    if (buf && buf.length) content.push({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + buf.toString('base64') } });
+  }
+
+  // 学生手写/绘图作答
+  const ansIds = Array.isArray(answerImageIds) ? answerImageIds : [];
+  if (ansIds.length) {
+    content.push({ type: 'text', text: '【学生手写作答图片】以下图片是学生的手写/绘图作答，请结合图片判分。' });
+    for (let j = 0; j < ansIds.length; j++) {
+      const abuf = await readImage((imageMap || {})[ansIds[j]]);
+      if (abuf && abuf.length) content.push({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + abuf.toString('base64') } });
+    }
+  }
+  const url = cfg.gradeBase.replace(/\/+$/, '') + '/chat/completions';
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.gradeKey },
+    body: JSON.stringify({
+      model: cfg.gradeModel,
+      reasoning_effort: /^glm-5/i.test(String(cfg.gradeModel || '')) ? 'low' : undefined,
+      messages: [
+        { role: 'system', content: '你是严格的 IB 老师，只输出 JSON。' },
+        { role: 'user', content: content }
+      ],
+      temperature: 0.2,
+      max_tokens: 2000
+    })
+  });
+  if (!resp.ok) { const t = await resp.text(); throw new Error('接口返回 ' + resp.status + '：' + String(t).slice(0, 200)); }
+  const data = await resp.json();
+  const raw = extractMessageText(data);
+  if (!raw) throw modelEmptyError(data);
+  const parsed = extractJSON(raw) || {};
+  const points = Array.isArray(parsed.points) ? parsed.points : [];
+  return {
+    standardAnswer: String(parsed.standardAnswer || ''),
+    points: points,
+    score: Number(parsed.score || 0),
+    fullMarks: Number(parsed.fullMarks || points.reduce(function (a, p) { return a + (Number(p.max) || 0); }, 0) || 1),
+    comment: String(parsed.comment || '')
+  };
+}
+
 async function callTranscribeAPI(cfg, item, imageMap) {
   const imageIds = (item && item.imageIds) || [];
   if (!imageIds.length) throw new Error('这道题没有图片');
@@ -809,7 +900,7 @@ module.exports = async function handler(req, res) {
       if (user.role !== 'admin' && it.ownerId !== user.id) return sendJSON(res, 403, { error: '只能处理自己的题目' });
       if (!db.config.gradeKey) return sendJSON(res, 400, { error: '还没有配置 AI 密钥，请管理员到「设置」里填写' });
       try {
-        const result = await callFigureAPI(db.config, it, db.images);
+        const result = await callFigureAPI(db.config, it, db.images, body.imageId);
         return sendJSON(res, 200, result);
       } catch (err) {
         console.error('[figure]', err && err.message);
@@ -879,6 +970,21 @@ module.exports = async function handler(req, res) {
       } catch (err) {
         console.error('[answer]', err && err.message);
         return sendJSON(res, 500, { error: '生成答案失败：' + (err && err.message ? err.message : err) });
+      }
+    }
+
+    // 单独求解/批改某一个小题
+    if (pathname === '/api/solve-part' && method === 'POST') {
+      const body = await readJSON(req);
+      const it = db.items.filter(function (i) { return i.id === body.itemId; })[0];
+      if (!it) return sendJSON(res, 404, { error: '题目不存在' });
+      if (!db.config.gradeKey) return sendJSON(res, 400, { error: '还没有配置 AI 密钥' });
+      try {
+        const result = await callSolvePartAPI(db.config, it, body.partLabel || 'a', body.partText || '', body.answerText || '', db.images, body.answerImageIds);
+        return sendJSON(res, 200, result);
+      } catch (err) {
+        console.error('[solve-part]', err && err.message);
+        return sendJSON(res, 500, { error: 'AI 处理失败：' + (err && err.message ? err.message : err) });
       }
     }
 

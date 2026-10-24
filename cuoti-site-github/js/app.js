@@ -659,7 +659,7 @@
     if (!t) return { stem: '', rest: '' };
     var lines = t.split('\n');
     if (lines.length < 2) return { stem: t, rest: '' };
-    var subRe = /^\s*(?:\([a-dA-D]\)|[a-d][\).、]|[A-D]\s*\()/;
+    var subRe = /^\s*(?:\([a-zA-Z]\)|[a-z][\).、]|[A-D]\s*\()/;
     for (var i = 1; i < lines.length; i++) {
       if (subRe.test(lines[i])) return { stem: lines.slice(0, i).join('\n'), rest: lines.slice(i).join('\n') };
     }
@@ -673,7 +673,7 @@
     var out = [];
     var cur = null;
     sp.rest.split('\n').forEach(function (ln) {
-      var m = ln.match(/^\s*\(?([a-d])[\).、]?\s+(.*)$/);
+      var m = ln.match(/^\s*\(?([a-z])[\).、]?\s+(.*)$/);
       if (m) {
         cur = { label: m[1], body: m[2] };
         out.push(cur);
@@ -685,6 +685,42 @@
     // 只认以小写 a、b 开头的多小题（避免把选择题选项当小题）
     if (out[0].label !== 'a' || out[1].label !== 'b') return [];
     return out.map(function (x) { return { label: x.label, body: String(x.body || '').trim() }; });
+  }
+
+  function partActionsHTML(it, label) {
+    return '<div class="part-actions">' +
+      '<label class="btn tiny">📷 手写/绘图<input type="file" class="part-file" accept="image/*" multiple data-id="' + esc(it.id) + '" data-part="' + esc(label) + '" hidden></label>' +
+      '<label class="btn tiny">📷 手写/绘图<input type="file" class="part-file" accept="image/*" multiple data-id="' + esc(it.id) + '" data-part="' + esc(label) + '" hidden></label>' +
+      '<button class="btn tiny" data-action="part-formula" data-id="' + esc(it.id) + '" data-part="' + esc(label) + '">∑ 公式</button>' +
+      '<button class="btn tiny" data-action="part-solve" data-id="' + esc(it.id) + '" data-part="' + esc(label) + '">🤖 批改</button>' +
+      '<button class="btn tiny" data-action="part-answer" data-id="' + esc(it.id) + '" data-part="' + esc(label) + '">👀 答案</button>' +
+      '</div>';
+  }
+
+  function partResultHTML(it, label) {
+    var res = (it.partResults || {})[label];
+    var imgs = (it.partAnswerImageIds || {})[label] || [];
+    var imgHTML = imgs.length
+      ? '<div class="thumbs">' + imgs.map(function (id) {
+          return '<div class="thumb"><img data-img="' + esc(id) + '" data-action="zoom" alt="作答图片"></div>';
+        }).join('') + '</div>'
+      : '';
+    if (!res) return imgHTML;
+    var html = '<div class="part-result">';
+    if (res.standardAnswer) html += '<div class="answer-line"><b>参考答案：</b>' + renderMathText(res.standardAnswer) + '</div>';
+    if ((res.points || []).length) {
+      html += '<div class="ms-view">' + res.points.map(function (p) {
+        var hasScore = typeof p.awarded === 'number' && typeof p.max === 'number';
+        var ok = hasScore && p.awarded >= p.max;
+        return '<div class="ms-view-item' + (ok ? '' : ' missed') + '">' + (ok ? '✓ ' : '✗ ') + renderMathText(p.point) +
+          (hasScore ? '（' + p.awarded + '/' + p.max + '）' : '') + (p.comment ? ' —— ' + renderMathText(p.comment) : '') + '</div>';
+      }).join('') + '</div>';
+    }
+    if (res.mode === 'grade' && typeof res.score === 'number') {
+      html += '<div class="mine-line"><b>得分：' + res.score + ' / ' + (res.fullMarks || '') + '</b></div>';
+    }
+    if (res.comment) html += '<div class="mine-line">📝 ' + renderMathText(res.comment) + '</div>';
+    return html + '</div>' + (imgHTML ? (res.standardAnswer || (res.points||[]).length ? '<div style="margin-top:6px">' + imgHTML + '</div>' : imgHTML) : '');
   }
 
   function itemCardHTML(it) {
@@ -805,6 +841,8 @@
           return '<div class="q-part">' +
             '<div class="q-text q-text-sub">(' + esc(p.label) + ') ' + renderMathText(p.body) + '</div>' +
             '<textarea class="inline-answer-text" rows="2" data-part="' + esc(p.label) + '" placeholder="第 (' + esc(p.label) + ') 小题的答案 / 过程"></textarea>' +
+            partActionsHTML(it, p.label) +
+            partResultHTML(it, p.label) +
           '</div>';
         }).join('') +
         __actionRow();
@@ -1677,8 +1715,9 @@
     if (state.fqHistory.length > 50) state.fqHistory.shift();
   }
 
-  function openFormulaEditor(itemId) {
+  function openFormulaEditor(itemId, partLabel) {
     state.formulaTarget = itemId;
+    state.fqPart = partLabel || null;
     var ta = $('#formula-input');
     if (ta) ta.value = '';
     state.fqHistory = [];
@@ -1725,7 +1764,12 @@
     var input = $('#formula-input');
     var src = input ? input.value.trim() : '';
     if (!src) { toast('先输入或点选一个公式', 'err'); return; }
-    var ta = state.fqTargetEl && document.body.contains(state.fqTargetEl) ? state.fqTargetEl : null;
+    var ta = null;
+    if (state.fqPart) {
+      var __card = document.querySelector('article.item-card[data-id="' + state.formulaTarget + '"]');
+      ta = __card ? __card.querySelector('textarea[data-part="' + state.fqPart + '"]') : null;
+    }
+    if (!ta) ta = state.fqTargetEl && document.body.contains(state.fqTargetEl) ? state.fqTargetEl : null;
     if (!ta) {
       var card = document.querySelector('article.item-card[data-id="' + state.formulaTarget + '"]');
       ta = card ? card.querySelector('.inline-answer-text') : null;
@@ -1780,6 +1824,117 @@
     });
   }
 
+  function cropImageId(imgId, box) {
+    return getImageUrl(imgId).then(function (url) {
+      if (!url) return null;
+      return loadImageEl(url);
+    }).then(function (img) {
+      var sx = Math.max(0, Math.round(box.x * img.naturalWidth));
+      var sy = Math.max(0, Math.round(box.y * img.naturalHeight));
+      var sw = Math.min(img.naturalWidth - sx, Math.round(box.w * img.naturalWidth));
+      var sh = Math.min(img.naturalHeight - sy, Math.round(box.h * img.naturalHeight));
+      if (sw < 30 || sh < 30) return null;
+      var canvas = document.createElement('canvas');
+      canvas.width = sw;
+      canvas.height = sh;
+      canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+      return new Promise(function (resolve) { canvas.toBlob(resolve, 'image/jpeg', 0.92); });
+    }).then(function (blob) {
+      if (!blob) return null;
+      var newId = uid();
+      return DataStore.put('images', { id: newId, blob: blob, type: 'image/jpeg', name: '' }).then(function () { return newId; });
+    }).catch(function () { return null; });
+  }
+
+  function autoCropFromPages(itemId) {
+    var it = byId(state.items, 'id', itemId);
+    if (!it) return;
+    var ids = (it.imageIds || []).slice();
+    if (!ids.length) return;
+    toast('正在从卷子照片里裁出图形…', 'ok');
+    (async function () {
+      var cropped = null;
+      for (var i = 0; i < ids.length; i++) {
+        try {
+          var res = await Cloud.detectFigure(itemId, ids[i]);
+          if (res && res.found && res.box && res.box.w > 0.03 && res.box.h > 0.03) {
+            cropped = await cropImageId(ids[i], res.box);
+            if (cropped) break;
+          }
+        } catch (e) {}
+      }
+      it = byId(state.items, 'id', itemId) || it;
+      it.prevImageIds = ids;
+      it.imageIds = cropped ? [cropped] : [];
+      it.updatedAt = new Date().toISOString();
+      DataStore.put('items', it).then(function () {
+        return bootData();
+      }).then(function () {
+        toast(cropped ? '已保留裁剪后的图形，卷子照片已移除' : '未检测到图形，卷子照片已移除', 'ok');
+      }).catch(function (e) {
+        toast('处理图片失败：' + (e && e.message ? e.message : e), 'err');
+      });
+    })();
+  }
+
+  function addPartImages(itemId, label, fileList) {
+    var it = byId(state.items, 'id', itemId);
+    if (!it) return;
+    var files = Array.prototype.slice.call(fileList || []).filter(function (f) { return f && /^image\//.test(f.type || ''); });
+    if (!files.length) return;
+    toast('正在上传图片…', 'ok');
+    Promise.all(files.map(compressImage)).then(function (blobs) {
+      var writes = blobs.map(function (b) {
+        var id = uid();
+        return DataStore.put('images', { id: id, blob: b, type: 'image/jpeg', name: '' }).then(function () { return id; });
+      });
+      return Promise.all(writes);
+    }).then(function (ids) {
+      it.partAnswerImageIds = it.partAnswerImageIds || {};
+      it.partAnswerImageIds[label] = (it.partAnswerImageIds[label] || []).concat(ids);
+      it.updatedAt = new Date().toISOString();
+      return DataStore.put('items', it).then(function (saved) {
+        if (saved && saved.id) it = Object.assign(it, saved);
+        state.items = state.items.filter(function (x) { return x.id !== it.id; });
+        state.items.push(it);
+        renderCurrent();
+        toast('已添加 (' + label + ') 的作答图片', 'ok');
+      });
+    }).catch(function (e) {
+      toast('上传失败：' + (e && e.message ? e.message : e), 'err');
+    });
+  }
+
+  function solvePart(itemId, label, withAnswer) {
+    if (!state.cloud || typeof Cloud === 'undefined') { toast('需要班级服务器模式', 'err'); return; }
+    var it = byId(state.items, 'id', itemId);
+    if (!it) return;
+    var parts = questionParts(it.question || '');
+    var part = null;
+    for (var i = 0; i < parts.length; i++) if (parts[i].label === label) part = parts[i];
+    var body = part ? part.body : '';
+    var card = document.querySelector('article.item-card[data-id="' + itemId + '"]');
+    var ta = card ? card.querySelector('textarea[data-part="' + label + '"]') : null;
+    var answerText = withAnswer && ta ? ta.value.trim() : '';
+    if (withAnswer && !answerText) { toast('先在 (' + label + ') 框里写下答案再批改', 'err'); return; }
+    toast('AI 正在处理 (' + label + ') 小题…', 'ok');
+    var ansImgs = (it.partAnswerImageIds || {})[label] || [];
+    Cloud.solvePart(itemId, label, body, answerText, ansImgs).then(function (res) {
+      it.partResults = it.partResults || {};
+      it.partResults[label] = Object.assign({ mode: withAnswer ? 'grade' : 'answer', at: new Date().toISOString() }, res);
+      it.updatedAt = new Date().toISOString();
+      return DataStore.put('items', it).then(function (saved) {
+        if (saved && saved.id) it = Object.assign(it, saved);
+        state.items = state.items.filter(function (x) { return x.id !== it.id; });
+        state.items.push(it);
+        renderCurrent();
+        toast('(' + label + ') 已完成', 'ok');
+      });
+    }).catch(function (e) {
+      toast('失败：' + (e && e.message ? e.message : e), 'err');
+    });
+  }
+
   function transcribeItem(itemId) {
     if (!state.cloud || typeof Cloud === 'undefined') { toast('图片转文字需要班级服务器模式', 'err'); return; }
     state.transcribing = state.transcribing || {};
@@ -1799,13 +1954,7 @@
         var cur = byId(state.items, 'id', itemId);
         // 多页（>=2 张）视为卷子照片：文字已提取，自动移除照片让卡片干净
         if (cur && (cur.imageIds || []).length > 1) {
-          cur.prevImageIds = (cur.imageIds || []).slice();
-          cur.imageIds = [];
-          cur.updatedAt = new Date().toISOString();
-          DataStore.put('items', cur).then(function () {
-            toast('已转成文字，卷子照片已自动移除（可在编辑里还原）', 'ok');
-            return bootData();
-          });
+          autoCropFromPages(itemId);
           return;
         }
         if (cur && (cur.imageIds || []).length === 1) {
@@ -2523,6 +2672,9 @@
       if (action === 'delete-item') { deleteItem(id); return; }
       if (action === 'toggle-mastered') { toggleMastered(id); return; }
       if (action === 'open-formula') { openFormulaEditor(id); return; }
+      if (action === 'part-formula') { openFormulaEditor(id, el.getAttribute('data-part')); return; }
+      if (action === 'part-solve') { solvePart(id, el.getAttribute('data-part'), true); return; }
+      if (action === 'part-answer') { solvePart(id, el.getAttribute('data-part'), false); return; }
       if (action === 'close-formula') { hideModal('modal-formula'); return; }
       if (action === 'insert-formula') { insertFormulaToAnswer(); return; }
       if (action === 'close-editor') { hideModal('modal-editor'); state.editing = null; return; }
@@ -2681,6 +2833,16 @@
     document.addEventListener('change', function (e) {
       var t = e.target;
       if (!t || !t.classList) return;
+      if (t.classList.contains('part-file')) {
+        addPartImages(t.getAttribute('data-id'), t.getAttribute('data-part'), t.files);
+        t.value = '';
+        return;
+      }
+      if (t.classList.contains('part-file')) {
+        addPartImages(t.getAttribute('data-id'), t.getAttribute('data-part'), t.files);
+        t.value = '';
+        return;
+      }
       if (t.classList.contains('answer-file')) {
         addAnswerImages(t.getAttribute('data-id'), t.files);
         t.value = '';

@@ -110,8 +110,11 @@
     tag: function (itemId) {
       return req('POST', '/api/tag', { itemId: itemId });
     },
-    detectFigure: function (itemId) {
-      return req('POST', '/api/detect-figure', { itemId: itemId });
+    detectFigure: function (itemId, imageId) {
+      return req('POST', '/api/detect-figure', { itemId: itemId, imageId: imageId || '' });
+    },
+    solvePart: function (itemId, partLabel, partText, answerText, answerImageIds) {
+      return req('POST', '/api/solve-part', { itemId: itemId, partLabel: partLabel, partText: partText, answerText: answerText || '', answerImageIds: answerImageIds || [] });
     },
     getConfig: function () { return req('GET', '/api/config'); },
     saveConfig: function (cfg) { return req('POST', '/api/config', cfg); },
