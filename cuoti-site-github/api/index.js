@@ -491,6 +491,7 @@ module.exports = async function handler(req, res) {
         serverless: true,
         blob: useBlob() ? 'blob' : 'memory',
       storage: useKV() ? 'kv' : (useBlob() ? 'blob-json' : 'memory'),
+        ocr: 'multi-page-v3',
         registerCodeRequired: !!REGISTER_CODE,
         autoGrade: !!db.config.gradeKey
       });
