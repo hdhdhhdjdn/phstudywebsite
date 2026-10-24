@@ -957,6 +957,25 @@
     return el && el.closest ? el.closest('.mathfield') : null;
   }
 
+  function insertLatexIntoField(field, tex) {
+    if (!field || !tex) return false;
+    try { field.focus(); } catch (e) {}
+    if (field.tagName === 'MATH-FIELD') {
+      try {
+        var cur = field.value || '';
+        field.value = cur ? (cur + tex) : tex;
+        setTimeout(function () { try { field.focus(); } catch (e2) {} }, 20);
+        return true;
+      } catch (e) { return false; }
+    }
+    // 兜底可编辑框
+    try {
+      field.textContent = (field.textContent || '') + tex;
+      field.setAttribute('data-tex', field.textContent);
+      return true;
+    } catch (e) { return false; }
+  }
+
   function dockInsertText(field, txt) {
     if (field && field.querySelector) {
       var ta = field.querySelector('.mf-input');
@@ -3903,16 +3922,7 @@
       if (tplBtn) {
         var fldT = activeMathField();
         var texT = decodeURIComponent(tplBtn.getAttribute('data-dock-tex') || '');
-        if (fldT && texT) {
-          try {
-            fldT.focus();
-            fldT.insert(texT);
-            if (!String(fldT.value || '').trim()) fldT.value = texT;
-          } catch (e) {
-            try { fldT.value = (fldT.value || '') + texT; } catch (e2) {}
-          }
-          setTimeout(function () { try { fldT.focus(); } catch (e3) {} }, 30);
-        }
+        if (fldT && texT) insertLatexIntoField(fldT, texT);
         return;
       }
       var keyBtn = t.closest('[data-dock-key]');
