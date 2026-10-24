@@ -1169,7 +1169,12 @@
     refreshReviewCounts();
     toast('已保存，正在上传图片…', 'ok');
 
-    Promise.all(writes.concat(dels)).then(function () {
+    // 串行写入：图片一张一张上传，避免并发写库互相覆盖（第二页丢失的根因）
+    var seq = Promise.resolve();
+    writes.concat(dels).forEach(function (task) {
+      seq = seq.then(function () { return task; });
+    });
+    seq.then(function () {
       return DataStore.put('items', it);
     }).then(function (saved) {
       if (saved && saved.id) {
@@ -1792,6 +1797,17 @@
           return;
         }
         var cur = byId(state.items, 'id', itemId);
+        // 多页（>=2 张）视为卷子照片：文字已提取，自动移除照片让卡片干净
+        if (cur && (cur.imageIds || []).length > 1) {
+          cur.prevImageIds = (cur.imageIds || []).slice();
+          cur.imageIds = [];
+          cur.updatedAt = new Date().toISOString();
+          DataStore.put('items', cur).then(function () {
+            toast('已转成文字，卷子照片已自动移除（可在编辑里还原）', 'ok');
+            return bootData();
+          });
+          return;
+        }
         if (cur && (cur.imageIds || []).length === 1) {
           toast('已转成文字，正在自动裁剪图形…', 'ok');
           setTimeout(function () { autoCropFigure(itemId); }, 200);
