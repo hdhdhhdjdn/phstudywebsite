@@ -846,3 +846,17 @@ math-field.mathfield { min-width: 220px; min-height: 40px; padding: 2px 8px; bac
 math-field.mathfield:focus-within { background: #fff; border-color: #7aa7ff; box-shadow: 0 0 0 2px rgba(90,140,255,.18); }
 math-field.mathfield::part(virtual-keyboard-toggle), math-field.mathfield::part(menu-toggle) { display: none; }
 .mathfield.mathfield-plain { display: inline-block; padding: 6px 10px; background: #f3f5f8; border: 1px solid #cfd8e3; border-radius: 6px; font-family: KaTeX_Math, "Cambria Math", serif; font-size: 20px; }
+/* 底部符号栏（Word 风格） */
+.formula-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; background: #fff; border-top: 1px solid #d7dee8; box-shadow: 0 -8px 24px rgba(15,35,70,.12); max-height: 42vh; overflow-y: auto; }
+.formula-dock.hidden { display: none; }
+.fd-inner { padding: 8px 14px 12px; }
+.fd-tabs { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid #e6ebf2; padding-bottom: 6px; margin-bottom: 10px; }
+.fd-tab { padding: 6px 12px; border: none; background: transparent; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 14px; color: #525f70; }
+.fd-tab:hover { background: #f2f6fc; }
+.fd-tab.active { color: #1b64d1; font-weight: 600; box-shadow: inset 0 -2px 0 #1b64d1; }
+.fd-close { padding: 4px 10px; border: 1px solid #d7dee8; background: #fff; border-radius: 6px; cursor: pointer; color: #6b7688; }
+.fd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 6px; }
+.fd-sym, .fd-struct { height: 44px; border: 1px solid #dfe5ee; background: #fff; border-radius: 6px; cursor: pointer; font-size: 18px; color: #1f2733; display: flex; align-items: center; justify-content: center; font-family: KaTeX_Main, "Cambria Math", serif; }
+.fd-struct { font-size: 14px; background: #f8fbff; }
+.fd-sym:hover, .fd-struct:hover { border-color: #7aa7ff; background: #eef5ff; }
+body.has-dock { padding-bottom: 260px; }

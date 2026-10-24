@@ -795,44 +795,51 @@
   // ---------- 富文本答题框（框内直接显示公式） ----------
   // ---------- Word 式公式框 ----------
   // ---------- 底部公式符号栏 ----------
-  var DOCK_GROUPS = [
-    { title: '运算', keys: ['+', '−', '±', '×', '÷', '=', '≠', '≈', '≡', '≤', '≥', '<', '>', '∞', '%', '∝', '⇒', '⇔', '∴', '∵'] },
-    { title: '字母', keys: ['x', 'y', 'z', 'a', 'b', 'c', 'n', 'm', 't', 'v', 'u', 's', 'f', 'q', 'I', 'R', 'V', 'T', 'p', 'P'] },
-    { title: '希腊', keys: ['α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'λ', 'μ', 'ν', 'π', 'ρ', 'σ', 'τ', 'φ', 'ω', 'Δ', 'Ω', '∂', '∇'] },
-    { title: '单位', keys: ['°C', '°F', 'K', 'mol', 'dm', 'cm', 'mm', 'm', 's', 'kg', 'g', 'J', 'kJ', 'N', 'Pa', 'V', 'A', 'W', 'Hz', 'C', 'mol dm-3'] },
-    { title: '结构', structs: [
-      { k: 'frac', label: '分式 a/b' },
-      { k: 'sup', label: '上标 x²' },
-      { k: 'sub', label: '下标 x₂' },
-      { k: 'sqrt', label: '根号 √' },
-      { k: 'int', label: '积分 ∫' },
-      { k: 'sum', label: '求和 ∑' },
-      { k: 'lim', label: '极限 lim' },
-      { k: 'paren', label: '括号 ( )' },
-      { k: 'matrix', label: '矩阵 [ ]' }
+  var DOCK_CATS = [
+    { id: 'math', label: '基础数学', keys: ['±', '∞', '=', '≠', '≈', '≡', '≤', '≥', '<', '>', '×', '÷', '!', '%', '°', '°C', '°F', 'Δ', '∇', '∂', '√', '∛', '∜', '∪', '∩', '∅', '∈', '∉', '∋', '∀', '∃', '≪', '≫', '∓', '≅', '≃', '⅀', 'ⅅ'] },
+    { id: 'greek', label: '希腊字母', keys: ['α', 'β', 'γ', 'δ', 'ε', 'ε', 'ζ', 'η', 'θ', 'ϑ', 'ι', 'κ', 'λ', 'μ', 'ν', 'ξ', 'ο', 'π', 'ϖ', 'ρ', 'ϱ', 'σ', 'ς', 'τ', 'υ', 'φ', 'ϕ', 'χ', 'ψ', 'ω', 'Γ', 'Δ', 'Θ', 'Λ', 'Ξ', 'Π', 'Σ', 'Φ', 'Ψ', 'Ω'] },
+    { id: 'letters', label: '字母', keys: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'F', 'I', 'K', 'M', 'N', 'P', 'R', 'T', 'V', 'W', 'X', 'Y', 'Z'] },
+    { id: 'ops', label: '运算符', keys: ['+', '−', '×', '÷', '±', '∓', '=', '≠', '≈', '≡', '≤', '≥', '≪', '≫', '∝', '⇔', '⇒', '∴', '∵', '∧', '∨', '¬', '⊕', '⊗', '⊙', '∗', '·', '∘'] },
+    { id: 'arrows', label: '箭头', keys: ['→', '←', '↑', '↓', '↔', '⇄', '⇒', '⇐', '⇔', '↦', '↩', '↪', '⟶', '⟵', '⟹', '⟸', '⌦', '⤳', '⇀', '⇁'] },
+    { id: 'units', label: '单位', keys: ['K', 'mol', 'dm', 'cm', 'mm', 'm', 's', 'min', 'kg', 'g', 'J', 'kJ', 'N', 'Pa', 'kPa', 'V', 'A', 'W', 'Hz', 'C', 'mol dm-3', 'g cm-3', 'm s-1', 'm s-2'] },
+    { id: 'struct', label: '结构', structs: [
+      { k: 'frac', label: '分式' }, { k: 'sup', label: '上标' }, { k: 'sub', label: '下标' },
+      { k: 'sqrt', label: '根号' }, { k: 'int', label: '积分' }, { k: 'sum', label: '求和' },
+      { k: 'lim', label: '极限' }, { k: 'paren', label: '括号' }, { k: 'matrix', label: '矩阵' }
     ] }
   ];
 
+  var DOCK_ACTIVE = 'math';
+
   function renderFormulaDock() {
     var box = $('#fd-inner');
-    if (!box || box.getAttribute('data-ready')) return;
-    var html = '';
-    DOCK_GROUPS.forEach(function (g) {
-      html += '<div class="fd-group"><div class="fd-title">' + esc(g.title) + '</div><div class="fd-keys">';
-      if (g.keys) {
-        g.keys.forEach(function (k) {
-          html += '<button type="button" class="fd-key" data-dock-key="' + esc(k) + '">' + esc(k) + '</button>';
-        });
-      }
-      if (g.structs) {
-        g.structs.forEach(function (s) {
-          html += '<button type="button" class="fd-key fd-struct" data-dock-struct="' + esc(s.k) + '">' + esc(s.label) + '</button>';
-        });
-      }
-      html += '</div></div>';
-    });
-    box.innerHTML = html;
-    box.setAttribute('data-ready', '1');
+    if (!box) return;
+    var cat = null;
+    for (var i = 0; i < DOCK_CATS.length; i++) if (DOCK_CATS[i].id === DOCK_ACTIVE) cat = DOCK_CATS[i];
+    if (!cat) cat = DOCK_CATS[0];
+
+    var tabs = DOCK_CATS.map(function (c) {
+      return '<button type="button" class="fd-tab' + (c.id === DOCK_ACTIVE ? ' active' : '') + '" data-dock-cat="' + c.id + '">' + esc(c.label) + '</button>';
+    }).join('');
+
+    var grid = '';
+    if (cat.keys) {
+      grid = cat.keys.map(function (k) {
+        return '<button type="button" class="fd-sym" data-dock-key="' + esc(k) + '">' + esc(k) + '</button>';
+      }).join('');
+    }
+    if (cat.structs) {
+      grid = cat.structs.map(function (st) {
+        return '<button type="button" class="fd-struct" data-dock-struct="' + esc(st.k) + '">' + esc(st.label) + '</button>';
+      }).join('');
+    }
+
+    box.innerHTML =
+      '<div class="fd-tabs">' + tabs +
+        '<span class="grow"></span>' +
+        '<button type="button" class="fd-close" data-dock-close="1">✕ 收起</button>' +
+      '</div>' +
+      '<div class="fd-grid">' + grid + '</div>';
   }
 
   function showFormulaDock() {
