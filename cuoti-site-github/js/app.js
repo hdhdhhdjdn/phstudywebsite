@@ -1864,7 +1864,8 @@
       }
       it = byId(state.items, 'id', itemId) || it;
       it.prevImageIds = ids;
-      it.imageIds = cropped ? [cropped] : [];
+      // 裁到图形就只留图形；没裁到就保留原图（不能把图片弄丢）
+      it.imageIds = cropped ? [cropped] : ids;
       it.updatedAt = new Date().toISOString();
       DataStore.put('items', it).then(function () {
         return bootData();
