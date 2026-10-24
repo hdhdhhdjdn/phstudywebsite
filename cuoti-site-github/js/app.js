@@ -964,12 +964,11 @@
     span.className = 'mathfield';
     var render = document.createElement('span');
     render.className = 'mf-render';
-    render.textContent = '';
     var input = document.createElement('textarea');
     input.className = 'mf-input';
     input.rows = 1;
-    input.setAttribute('placeholder', '在此处键入公式，例如 a+b^2、x_2、a/b');
     input.setAttribute('spellcheck', 'false');
+    input.setAttribute('placeholder', '在此处键入公式');
     span.appendChild(render);
     span.appendChild(input);
     return span;
@@ -992,9 +991,8 @@
     if (!input || !render) return;
     var raw = input.value || '';
     field.setAttribute('data-tex', raw);
-    if (!raw.trim()) { render.innerHTML = ''; return; }
+    if (!raw.trim()) { render.innerHTML = '<span class="mf-ph">在此处键入公式</span>'; return; }
     try { render.innerHTML = renderMathText('$' + rawToLatex(raw) + '$'); } catch (e) { render.textContent = raw; }
-    input.rows = Math.max(1, Math.min(3, Math.ceil(raw.length / 40)));
   }
 
   function restyleMathField(field) {
