@@ -905,6 +905,28 @@
   }
 
   var MATHLIVE_READY = false;
+  function ensureMathLiveLoaded() {
+    if (MATHLIVE_READY) return;
+    if (window.customElements && window.customElements.get('math-field')) { MATHLIVE_READY = true; return; }
+    if (state._mfLoading) return;
+    state._mfLoading = true;
+    var tries = 0;
+    function attempt() {
+      tries++;
+      var sc = document.createElement('script');
+      sc.src = 'js/mathlive.min.js?v=' + Date.now();
+      sc.onload = function () {
+        try { initMathLive(); } catch (e) {}
+        if (window.customElements && window.customElements.get('math-field')) MATHLIVE_READY = true;
+      };
+      sc.onerror = function () {
+        if (tries < 3) setTimeout(attempt, 800);
+      };
+      document.head.appendChild(sc);
+    }
+    attempt();
+  }
+
   function initMathLive() {
     if (MATHLIVE_READY) return;
     if (typeof window.MathLive === 'undefined') return;
@@ -921,16 +943,13 @@
     var ok = false;
     try { ok = !!(window.customElements && window.customElements.get('math-field')); } catch (e) { ok = false; }
     if (!ok) {
-      // 兜底：MathLive 没加载成功时用普通可编辑框，保证能输入
+      ensureMathLiveLoaded();
+      // 兜底：普通可编辑框，保证随时能输入（不提示任何错误）
       var span = document.createElement('span');
       span.className = 'mathfield mathfield-fallback';
       span.setAttribute('contenteditable', 'true');
       span.setAttribute('data-ph', '在此处键入公式。');
       span.setAttribute('spellcheck', 'false');
-      if (!state._mfWarned) {
-        state._mfWarned = true;
-        setTimeout(function () { toast('公式编辑器加载失败，已切换为简易输入框（刷新页面重试）', 'err'); }, 300);
-      }
       return span;
     }
     var mf = document.createElement('math-field');
