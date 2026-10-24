@@ -895,8 +895,19 @@ module.exports = async function handler(req, res) {
       if (user.role !== 'admin' && it.ownerId !== user.id) return sendJSON(res, 403, { error: '只能转自己的题目' });
       if (!db.config.gradeKey) return sendJSON(res, 400, { error: '还没有配置 AI 密钥，请管理员到「设置」里填写' });
       try {
-        const result = await callTranscribeAPI(db.config, it, db.images);
-        it.question = result.text;
+        // 若图片被自动裁剪过，用原始整页图识别（否则只剩图形，识别出来是空的）
+      const ocrItem = (it.prevImageIds && it.prevImageIds.length)
+        ? Object.assign({}, it, { imageIds: it.prevImageIds })
+        : it;
+      const result = await callTranscribeAPI(db.config, ocrItem, db.images);
+        var oldText = String(it.question || '').trim();
+        var newText = String(result.text || '').trim();
+        var keptOld = false;
+        if (newText.length < 15 && oldText.length > newText.length) {
+          keptOld = true; // 识别结果为空，保留原题干
+        } else {
+          it.question = newText;
+        }
         var imageRemoved = false;
         if (!result.hasImage && (it.imageIds || []).length) {
           it.imageIds = [];
@@ -904,7 +915,7 @@ module.exports = async function handler(req, res) {
         }
         it.updatedAt = nowISO();
         await writeDB(db);
-        return sendJSON(res, 200, { ok: true, question: it.question, hasImage: result.hasImage, imageRemoved: imageRemoved });
+        return sendJSON(res, 200, { ok: true, question: it.question, hasImage: result.hasImage, imageRemoved: imageRemoved, keptOld: keptOld });
       } catch (err) {
         console.error('[transcribe]', err && err.message);
         return sendJSON(res, 500, { error: '图片转文字失败：' + (err && err.message ? err.message : err) });

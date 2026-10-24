@@ -1777,6 +1777,10 @@
     toast('正在识别图片文字，请稍候…', 'ok');
     Cloud.transcribe(itemId).then(function (res) {
       return bootData().then(function () {
+        if (res && res.keptOld) {
+          toast('这次没识别到文字，已保留原题干（建议换个角度重拍再试）', 'err');
+          return;
+        }
         if (res && res.imageRemoved) {
           toast('已转成文字；AI 判断这题不含图表，已自动移除原图', 'ok');
           return;
