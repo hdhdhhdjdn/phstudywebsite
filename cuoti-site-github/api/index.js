@@ -104,6 +104,7 @@ async function writeDBToBlob(db) {
 // ---------------- Redis 逐条存储（直接走 Upstash REST） ----------------
 const R_COLLS = ['users', 'items', 'topics', 'inbox', 'submissions', 'progress'];
 function rHash(name) { return 'cuoti:coll:' + name; }
+const R_IMAGES = 'cuoti:images';
 const R_SESSIONS = 'cuoti:sessions';
 const R_CONFIG = 'cuoti:config';
 
@@ -168,6 +169,11 @@ async function readDBRedis() {
   });
   snap.sessions = sessMap;
 
+  // 图片映射（id -> Blob URL）
+  const imgMap = pairsToMap(await redisCmd(['HGETALL', R_IMAGES]));
+  db.images = Object.assign({}, imgMap);
+  snap.images = Object.assign({}, imgMap);
+
   const cfgRec = parseRecord(results[names.length + 1]);
   if (cfgRec && typeof cfgRec === 'object') db.config = Object.assign(db.config, cfgRec);
   snap.config = cfgRec ? JSON.stringify(cfgRec) : null;
@@ -208,6 +214,17 @@ async function writeDBRedis(db) {
     if (!(token in curS)) ops.push(['HDEL', R_SESSIONS, token]);
   });
   snap.sessions = curS;
+
+  const imgNow = db.images || {};
+  const imgPrev = snap.images || {};
+  Object.keys(imgNow).forEach(function (id) {
+    const url = String(imgNow[id]);
+    if (imgPrev[id] !== url) ops.push(['HSET', R_IMAGES, id, url]);
+  });
+  Object.keys(imgPrev).forEach(function (id) {
+    if (!(id in imgNow)) ops.push(['HDEL', R_IMAGES, id]);
+  });
+  snap.images = Object.assign({}, imgNow);
 
   const cfgJson = JSON.stringify(db.config || {});
   if (cfgJson !== snap.config) { ops.push(['SET', R_CONFIG, cfgJson]); snap.config = cfgJson; }
