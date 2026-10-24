@@ -53,19 +53,31 @@ function splitByBytes(str, maxBytes) {
 const BLOB_DB_PATH = 'cuoti/db.json';
 let blobWriteChain = Promise.resolve();
 
+let cachedBlobUrl = null;
+let cachedDB = null;
+let cachedAt = 0;
+
 async function readDBFromBlob() {
-  if (lastWrittenDB && Date.now() - lastWrittenAt < 1500) return lastWrittenDB;
+  if (cachedDB && Date.now() - cachedAt < 3000) return cachedDB;
   try {
-    const { list } = require('@vercel/blob');
-    const res = await list({ prefix: BLOB_DB_PATH, limit: 1 });
-    const blob = res && res.blobs && res.blobs[0];
-    if (!blob || !blob.url) return null;
-    const bust = blob.url + (blob.url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    let blobUrl = cachedBlobUrl;
+    if (!blobUrl) {
+      const { list } = require('@vercel/blob');
+      const res = await list({ prefix: BLOB_DB_PATH, limit: 1 });
+      const blob = res && res.blobs && res.blobs[0];
+      if (!blob || !blob.url) return null;
+      blobUrl = blob.url;
+      cachedBlobUrl = blobUrl;
+    }
+    const bust = blobUrl + (blobUrl.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
     const r = await fetch(bust, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } });
     if (!r.ok) return null;
     const txt = await r.text();
     if (!txt) return null;
-    return JSON.parse(txt);
+    const parsed = JSON.parse(txt);
+    cachedDB = parsed;
+    cachedAt = Date.now();
+    return parsed;
   } catch (e) {
     console.error('[blob-db] read failed:', e && e.message);
     return null;
@@ -85,6 +97,8 @@ async function writeDBToBlob(db) {
   });
   lastWrittenDB = db;
   lastWrittenAt = Date.now();
+  cachedDB = db;
+  cachedAt = Date.now();
 }
 
 async function readDB() {
@@ -645,6 +659,23 @@ module.exports = async function handler(req, res) {
       }
       clearSessionCookie(res);
       return sendJSON(res, 200, { ok: true });
+    }
+
+    // bootstrap：一次拿全部启动数据，减少请求数
+    if (pathname === '/api/bootstrap' && method === 'GET') {
+      const owns = function (x) { return x.ownerId === user.id; };
+      const subs = (user.role === 'admin') ? db.submissions : db.submissions.filter(owns);
+      const inbox = (user.role === 'admin') ? db.inbox : db.inbox.filter(owns);
+      return sendJSON(res, 200, {
+        ok: true,
+        me: publicUser(user),
+        items: db.items,
+        topics: db.topics,
+        inbox: inbox,
+        submissions: subs,
+        progress: db.progress.filter(function (x) { return x.ownerId === user.id; }),
+        config: { autoGrade: !!db.config.gradeKey, gradeModel: db.config.gradeModel }
+      });
     }
 
     // me

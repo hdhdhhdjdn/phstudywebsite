@@ -115,6 +115,9 @@
     },
     getConfig: function () { return req('GET', '/api/config'); },
     saveConfig: function (cfg) { return req('POST', '/api/config', cfg); },
+    bootstrap: function () {
+      return req('GET', '/api/bootstrap');
+    },
     me: function () {
       return req('GET', '/api/me').then(function (d) { Cloud.user = d.user; return d.user; });
     },

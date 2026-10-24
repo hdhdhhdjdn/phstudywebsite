@@ -388,7 +388,38 @@
     });
   }
 
+  function applyCollections(payload) {
+    state.items = (payload && payload.items) || [];
+    state.topics = (payload && payload.topics) || [];
+    state.inbox = (payload && payload.inbox) || [];
+    state.submissions = (payload && payload.submissions) || [];
+    state.progress = {};
+    ((payload && payload.progress) || []).forEach(function (p) {
+      if (!p || !p.itemId) return;
+      var old = state.progress[p.itemId];
+      if (!old || String(p.updatedAt || '') >= String(old.updatedAt || '')) state.progress[p.itemId] = p;
+    });
+  }
+
+  function afterBoot() {
+    rebuildFilters();
+    refreshReviewCounts();
+    renderCurrent();
+  }
+
   function bootData() {
+    // 云端：一次请求拿全部数据（快很多）
+    if (state.cloud && typeof Cloud !== 'undefined' && typeof Cloud.bootstrap === 'function') {
+      return Cloud.bootstrap().then(function (res) {
+        if (res && res.me) state.me = res.me;
+        applyCollections(res || {});
+        return null;
+      }).then(afterBoot).catch(function (e) {
+        console.error(e);
+        showBanner('数据加载失败：' + (e && e.message ? e.message : e));
+        renderCurrent();
+      });
+    }
     return DataStore.getAll('items').then(function (items) {
       return DataStore.getAll('topics').then(function (topics) {
         return DataStore.getAll('inbox').then(function (inbox) {
@@ -409,11 +440,7 @@
           });
         });
       });
-    }).then(function () {
-      rebuildFilters();
-      refreshReviewCounts();
-      renderCurrent();
-    }).catch(function (e) {
+    }).then(afterBoot).catch(function (e) {
       console.error(e);
       showBanner('数据加载失败：' + (e && e.message ? e.message : e) + '（请使用 Chrome / Edge 打开）');
       renderCurrent();
