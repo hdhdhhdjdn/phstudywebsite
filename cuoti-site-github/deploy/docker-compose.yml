@@ -1,0 +1,14 @@
+services:
+  cuoti:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: cuoti
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      - PORT=8765
+      - REGISTER_CODE=改成你的邀请码
+    volumes:
+      - ../cloud-data:/app/cloud-data

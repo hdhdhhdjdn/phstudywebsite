@@ -1,0 +1,17 @@
+[Unit]
+Description=Cuoti Class Server (错题站)
+After=network.target
+
+[Service]
+Type=simple
+User=cuoti
+WorkingDirectory=/opt/cuoti
+EnvironmentFile=/opt/cuoti/.env
+ExecStart=/usr/bin/node /opt/cuoti/cloud-server.js
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/log/cuoti.log
+StandardError=append:/var/log/cuoti.err.log
+
+[Install]
+WantedBy=multi-user.target

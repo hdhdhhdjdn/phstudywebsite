@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>错题站 · 错题 / 知识点 / Mark Scheme</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/katex.min.css">
+</head>
+<body>
+
+<div id="storage-warn" class="banner hidden"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">📚</span>
+    <div>
+      <div class="brand-name">错题站</div>
+      <div class="brand-sub">错题 · 知识点 · Mark Scheme</div>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-action="tab" data-tab="items">错题本</button>
+    <button class="tab" data-action="tab" data-tab="answers">作答 / 批改</button>
+    <button class="tab" data-action="tab" data-tab="topics">知识点</button>
+    <button class="tab" data-action="tab" data-tab="scheme">Mark Scheme</button>
+    <button class="tab" data-action="tab" data-tab="inbox">收件箱</button>
+    <button class="tab" data-action="tab" data-tab="review">复习</button>
+    <button class="tab" data-action="tab" data-tab="stats">统计</button>
+    <button class="tab" data-action="tab" data-tab="settings">设置</button>
+  </nav>
+  <div id="user-area" class="user-area hidden">
+    <span id="user-name" class="user-name"></span>
+    <button class="link" data-action="refresh">刷新</button>
+    <button class="link" data-action="logout">退出</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ 错题本 ============ -->
+  <section class="panel" id="panel-items">
+    <div class="toolbar">
+      <input id="f-search" class="input search" type="search" placeholder="搜索题干 / 答案 / 知识点 / 笔记…">
+      <select id="f-subject" class="select"></select>
+      <select id="f-topic" class="select"></select>
+      <select id="f-cause" class="select"></select>
+      <select id="f-status" class="select"></select>
+      <span class="grow"></span>
+      <button class="btn" data-action="toggle-group" id="group-toggle">🗂 按知识点</button>
+      <button class="btn" data-action="print">打印</button>
+      <button class="btn primary" data-action="new-item">+ 新增错题</button>
+    </div>
+    <div class="result-bar"><span id="items-count">共 0 题</span></div>
+    <div id="item-list" class="card-grid"></div>
+  </section>
+
+  <!-- ============ 作答 / 批改 ============ -->
+  <section class="panel hidden" id="panel-answers">
+    <div class="toolbar">
+      <select id="a-status" class="select">
+        <option value="">全部状态</option>
+        <option value="pending">待批改</option>
+        <option value="graded">已批改</option>
+      </select>
+      <span class="grow"></span>
+      <button class="btn" data-action="copy-pending">复制待批改</button>
+      <button class="btn primary" data-action="paste-grades">粘贴批改结果</button>
+      <button class="btn" data-action="export-grading">导出批改包</button>
+      <button class="btn" data-action="import-grades">导入批改包</button>
+      <input type="file" id="grades-file" accept=".zip,.json" hidden>
+    </div>
+    <p class="muted inbox-tip">
+      管理员在「设置 → AI 实时批改」填好 Key 后，同学提交作答会自动批改并直接显示结果。
+      没开实时批改时，也可以用：①「复制待批改」粘到聊天发我 → 「粘贴批改结果」；②「导出批改包」/「导入批改包」。
+    </p>
+    <div id="answers-list" class="card-grid"></div>
+  </section>
+
+  <!-- ============ 知识点 ============ -->
+  <section class="panel hidden" id="panel-topics">
+    <div class="toolbar">
+      <input id="topic-search" class="input search" type="search" placeholder="搜索知识点…">
+      <span class="grow"></span>
+      <button class="btn primary" data-action="new-topic">+ 新增知识点</button>
+    </div>
+    <div id="topic-list" class="card-grid"></div>
+  </section>
+
+  <!-- ============ Mark Scheme ============ -->
+  <section class="panel hidden" id="panel-scheme">
+    <div class="toolbar">
+      <select id="s-subject" class="select"></select>
+      <label class="check"><input type="checkbox" id="s-missed"> 只看「考试时漏掉的」要点</label>
+      <span class="grow"></span>
+      <span class="muted">复习时逐条对照：我漏了哪个关键词？</span>
+    </div>
+    <div id="scheme-list" class="scheme-list"></div>
+  </section>
+
+  <!-- ============ 收件箱（待转录） ============ -->
+  <section class="panel hidden" id="panel-inbox">
+    <div class="toolbar">
+      <select id="inbox-subject" class="select"></select>
+      <input id="inbox-uploader" class="input" placeholder="上传者（可留空）" style="width:160px">
+      <label class="btn primary">+ 添加题目图片<input type="file" id="inbox-file" accept="image/*" multiple hidden></label>
+      <span class="grow"></span>
+      <button class="btn" data-action="export-inbox">导出待转录包 .zip</button>
+      <button class="btn" data-action="import">导入转录结果</button>
+    </div>
+    <p class="muted inbox-tip">
+      流程：同学发来的题目照片先放进这里（可多选，也可以直接把图片拖进本页）→
+      点「导出待转录包」→ 把 zip 发给 AI 转录 → 拿到「已转录」结果包后点「导入转录结果」→
+      题目自动进「错题本」，收件箱对应条目自动清理。
+    </p>
+    <div id="inbox-list" class="card-grid inbox-grid"></div>
+  </section>
+
+  <!-- ============ 复习 ============ -->
+  <section class="panel hidden" id="panel-review">
+    <div class="review-top">
+      <div class="review-info">
+        今天待复习 <b id="review-due">0</b> 题 · 未掌握 <b id="review-total">0</b> 题
+      </div>
+      <button class="btn primary" data-action="start-review">开始复习</button>
+    </div>
+    <div id="review-stage" class="review-stage"></div>
+  </section>
+
+  <!-- ============ 统计 ============ -->
+  <section class="panel hidden" id="panel-stats">
+    <div id="stats"></div>
+  </section>
+
+  <!-- ============ 设置 ============ -->
+  <section class="panel hidden" id="panel-settings">
+    <div class="settings-grid">
+      <div class="card pad cloud-admin-only cloud-only">
+        <h3>AI 实时批改</h3>
+        <p class="muted">填入大模型 API Key 后，同学一提交作答就会自动批改并直接显示结果。推荐智谱「GLM-5.3-Flash」（原生多模态、成本低）：open.bigmodel.cn 注册 → 控制台 → API Key。</p>
+        <label class="field"><span>接口地址</span><input id="cfg-base" placeholder="https://open.bigmodel.cn/api/paas/v4"></label>
+        <label class="field"><span>模型名</span><input id="cfg-model" placeholder="glm-5.3-flash"></label>
+        <label class="field"><span>API Key</span><input id="cfg-key" type="password" placeholder="粘贴 Key；留空表示不修改"></label>
+        <div class="btn-row">
+          <button class="btn primary" data-action="save-grade-config">保存并启用</button>
+          <span id="cfg-status" class="muted">检测中…</span>
+        </div>
+      </div>
+      <div class="card pad cloud-admin-only">
+        <h3>题库包（含图片）</h3>
+        <p class="muted">导出后发给同学，对方在「导入」里选这个 .zip 即可合并题库。</p>
+        <div class="btn-row">
+          <button class="btn primary" data-action="export-zip">导出题库包 .zip</button>
+          <button class="btn" data-action="import">导入题库包 / JSON</button>
+          <input type="file" id="import-file" accept=".zip,.json" hidden>
+        </div>
+      </div>
+      <div class="card pad cloud-admin-only">
+        <h3>纯文本备份</h3>
+        <p class="muted">只导出文字（不含图片），适合快速备份。</p>
+        <button class="btn" data-action="export-json">导出 JSON</button>
+      </div>
+      <div class="card pad cloud-admin-only">
+        <h3>示例数据</h3>
+        <p class="muted">重新载入化学月考的 9 道错题和 8 个知识点（不会删除已有数据）。</p>
+        <button class="btn" data-action="seed">载入示例数据</button>
+      </div>
+      <div class="card pad danger-card cloud-admin-only cloud-hide">
+        <h3>清空数据</h3>
+        <p class="muted">删除本机全部错题、知识点和图片，无法恢复，请先导出备份。</p>
+        <button class="btn danger" data-action="clear-all">清空全部数据</button>
+      </div>
+      <div class="card pad">
+        <h3>存储状态</h3>
+        <div id="storage-status" class="muted">检测中…</div>
+      </div>
+      <div class="card pad">
+        <h3>使用提示</h3>
+        <ul class="tips">
+          <li>数据只存在这台电脑的浏览器里（IndexedDB），换电脑请先导出题库包。</li>
+          <li>题干可以只贴图片；图片支持 Ctrl+V 粘贴截图。</li>
+          <li>复习时先自己回忆，再点「显示答案」，最后按 忘了 / 有点难 / 记住了 安排下次。</li>
+          <li>「Mark Scheme」页把每道题的得分要点摊开，专治"会但拿不到分"。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ 粘贴批改结果 ============ -->
+<div id="modal-paste" class="modal hidden">
+  <div class="modal-mask" data-action="close-paste"></div>
+  <div class="modal-box narrow">
+    <div class="modal-head">
+      <h2>粘贴批改结果</h2>
+      <button class="icon-btn" data-action="close-paste" title="关闭">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted">把 AI 返回的批改结果（JSON）整段粘贴进来，点「应用」后直接显示在作答卡片上。</p>
+      <textarea id="paste-text" rows="10" placeholder='{"results":[{"submissionId":"...","standardAnswer":"...","score":3,"fullMarks":5,"points":[...],"comment":"...","causes":["C"]}]}'></textarea>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" data-action="close-paste">取消</button>
+      <button class="btn primary" data-action="apply-paste">应用批改结果</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 错题编辑弹窗 ============ -->
+<div id="modal-editor" class="modal hidden">
+  <div class="modal-mask" data-action="close-editor"></div>
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 id="editor-title">新增错题</h2>
+      <button class="icon-btn" data-action="close-editor" title="关闭">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="row-4">
+        <label class="field"><span>科目</span><select id="e-subject"></select></label>
+        <label class="field"><span>日期</span><input id="e-date" type="date"></label>
+        <label class="field"><span>状态</span><select id="e-status"></select></label>
+        <label class="field"><span>难度</span>
+          <select id="e-diff">
+            <option value="1">★ 简单</option>
+            <option value="2" selected>★★ 中等</option>
+            <option value="3">★★★ 难</option>
+          </select>
+        </label>
+      </div>
+      <label class="field"><span>来源 / 试卷</span><input id="e-source" placeholder="例如：化学月考 第 1 页 Q4"></label>
+      <label class="field"><span>知识点标签（用逗号分隔）</span>
+        <input id="e-topics" list="topic-suggestions" placeholder="例如：键能, 生成焓">
+        <datalist id="topic-suggestions"></datalist>
+      </label>
+      <label class="field"><span>题干</span><textarea id="e-question" rows="3" placeholder="题目内容；如果只拍照，也可以写一句简短描述"></textarea></label>
+      <div class="field">
+        <span>题目图片</span>
+        <div id="e-images" class="image-grid"></div>
+        <div class="image-actions">
+          <label class="btn tiny">+ 选择图片<input type="file" id="e-file" accept="image/*" multiple hidden></label>
+          <span class="hint">也可以直接 Ctrl+V 粘贴截图</span>
+        </div>
+      </div>
+      <div class="field-head" style="margin:6px 0 10px">
+        <button type="button" class="btn tiny" data-action="toggle-answer-fields" id="e-answer-toggle">▸ 已有答案？展开填写（可留空）</button>
+        <span class="hint">不知道答案不用填——AI 批改后会生成标准答案并自动写回题库</span>
+      </div>
+      <div id="e-answer-block">
+        <div class="row-2">
+          <label class="field"><span>我的答案（选填）</span><textarea id="e-my" rows="2"></textarea></label>
+          <label class="field"><span>正确答案（选填）</span><textarea id="e-correct" rows="2"></textarea></label>
+        </div>
+        <div class="field">
+          <div class="field-head"><span>Mark Scheme 得分要点</span><button class="btn tiny" type="button" data-action="add-ms">+ 添加要点</button></div>
+          <div id="e-ms" class="ms-list"></div>
+        </div>
+      </div>
+      <div class="field">
+        <span>错因（可多选）</span>
+        <div id="e-causes" class="chip-group"></div>
+      </div>
+      <label class="field"><span>笔记 / 一句话结论</span><textarea id="e-note" rows="2" placeholder="我当时为什么错？下次怎么避免？"></textarea></label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" data-action="close-editor">取消</button>
+      <button class="btn primary" data-action="save-item">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 知识点编辑弹窗 ============ -->
+<div id="modal-topic" class="modal hidden">
+  <div class="modal-mask" data-action="close-topic"></div>
+  <div class="modal-box narrow">
+    <div class="modal-head">
+      <h2 id="topic-title">新增知识点</h2>
+      <button class="icon-btn" data-action="close-topic" title="关闭">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="row-2">
+        <label class="field"><span>名称</span><input id="t-name" placeholder="例如：键能"></label>
+        <label class="field"><span>科目</span><select id="t-subject"></select></label>
+      </div>
+      <label class="field"><span>定义（课本原话）</span><textarea id="t-def" rows="2"></textarea></label>
+      <label class="field"><span>公式 / 关键规则</span><textarea id="t-formula" rows="2"></textarea></label>
+      <label class="field"><span>易错点</span><textarea id="t-pitfalls" rows="3"></textarea></label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" data-action="close-topic">取消</button>
+      <button class="btn primary" data-action="save-topic">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 公式编辑器 ============ -->
+<div id="modal-formula" class="modal hidden">
+  <div class="modal-mask" data-action="close-formula"></div>
+  <div class="modal-box wide formula-box">
+    <div class="modal-head">
+      <h2>插入数学公式</h2>
+      <button class="icon-btn" data-action="close-formula" title="关闭">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="formula-preview" id="formula-preview"></div>
+      <textarea id="formula-input" rows="2" placeholder="输入 LaTeX，或用下方键盘点选（例如 \frac{dy}{dx}、\int_0^1 x^2\,dx、\begin{cases} x+y=1 \\ x-y=0 \end{cases}）"></textarea>
+      <div class="fq-quick" id="formula-quick"></div>
+      <div class="fq-tabs" id="formula-tabs"></div>
+      <div class="fq-pad" id="formula-pad"></div>
+      <div class="fq-tools">
+        <button class="btn tiny" data-fqact="undo">↶ 撤销</button>
+        <button class="btn tiny" data-fqact="backspace">⌫ 退格</button>
+        <button class="btn tiny" data-fqact="clear">清空</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" data-action="close-formula">取消</button>
+      <button class="btn primary" data-action="insert-formula">插入到作答</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 图片查看 ============ -->
+<div id="modal-image" class="modal hidden">
+  <div class="modal-mask" data-action="close-image"></div>
+  <img id="modal-image-src" alt="题目图片">
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="js/zip.js"></script>
+<script src="js/katex.min.js"></script>
+<script src="js/db.js"></script>
+<script src="js/api.js"></script>
+<script src="js/seed.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

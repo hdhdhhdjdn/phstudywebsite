@@ -1,0 +1,17 @@
+{
+  "name": "cuoti-site",
+  "private": true,
+  "version": "1.0.0",
+  "description": "IB DP 班级错题站：错题本 + AI 批改 + KaTeX 公式（本地 / Vercel 双模式）",
+  "scripts": {
+    "dev": "node cloud-server.js",
+    "start": "node cloud-server.js",
+    "serve": "node server.js",
+    "build": "node build-single.js",
+    "test": "node test/zip.test.js && node test/vercel-api.test.js && node test/dom-check.js"
+  },
+  "dependencies": {
+    "@vercel/blob": "*",
+    "@vercel/kv": "*"
+  }
+}
