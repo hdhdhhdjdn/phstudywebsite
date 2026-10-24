@@ -280,8 +280,12 @@
   }
   function showBanner(msg) {
     var b = $('#storage-warn');
+    if (!b) return;
     b.textContent = msg;
     b.classList.remove('hidden');
+    // 8 秒后自动隐藏，避免挡住页面内容
+    if (showBanner._t) clearTimeout(showBanner._t);
+    showBanner._t = setTimeout(function () { b.classList.add('hidden'); }, 8000);
   }
 
   // ======================= 图片 =======================
@@ -301,7 +305,7 @@
     }
   }
   function hydrateImages(container) {
-    $('img[data-img]', container).forEach(function (img) {
+    $$('img[data-img]', container).forEach(function (img) {
       var id = img.getAttribute('data-img');
       img.onerror = function () {
         img.removeAttribute('data-img');
