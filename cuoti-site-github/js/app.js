@@ -1957,6 +1957,39 @@
     });
   }
 
+  // 识别到多道题时，拆成多条错题
+  function splitIntoItems(itemId, questions) {
+    var it = byId(state.items, 'id', itemId);
+    if (!it) return;
+    var extras = questions.slice(1);
+    var chain = Promise.resolve();
+    extras.forEach(function (q) {
+      chain = chain.then(function () {
+        var copy = {
+          id: uid(),
+          subject: it.subject,
+          date: it.date,
+          difficulty: it.difficulty,
+          source: it.source,
+          topics: (it.topics || []).slice(),
+          causes: [],
+          question: q,
+          imageIds: [],
+          status: 'new',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        return DataStore.put('items', copy);
+      });
+    });
+    chain.then(function () { return bootData(); }).then(function () {
+      renderCurrent();
+      toast('识别到 ' + questions.length + ' 道题，已拆分为 ' + questions.length + ' 条', 'ok');
+    }).catch(function (e) {
+      toast('拆分失败：' + (e && e.message ? e.message : e), 'err');
+    });
+  }
+
   function transcribeItem(itemId) {
     if (!state.cloud || typeof Cloud === 'undefined') { toast('图片转文字需要班级服务器模式', 'err'); return; }
     state.transcribing = state.transcribing || {};
@@ -1965,6 +1998,10 @@
     toast('正在识别图片文字，请稍候…', 'ok');
     Cloud.transcribe(itemId).then(function (res) {
       return bootData().then(function () {
+        if (res && Array.isArray(res.questions) && res.questions.length > 1) {
+          splitIntoItems(itemId, res.questions);
+          return;
+        }
         if (res && res.keptOld) {
           toast('这次没识别到文字，已保留原题干（建议换个角度重拍再试）', 'err');
           return;

@@ -629,6 +629,26 @@ async function callSolvePartAPI(cfg, item, partLabel, partText, answerText, imag
   };
 }
 
+// 按题号拆分（识别到多道题时）
+function splitQuestionsByNumber(text) {
+  const t = String(text || '').replace(/\r/g, '');
+  const lines = t.split('\n');
+  const marks = [];
+  lines.forEach(function (ln, i) { if (/^\s*\d{1,2}\s*[.)]\s+\S/.test(ln)) marks.push(i); });
+  if (marks.length < 2) return [t.trim()];
+  const nums = marks.map(function (i) { return parseInt(lines[i].trim(), 10); });
+  let inc = 0;
+  for (let k = 1; k < nums.length; k++) if (nums[k] === nums[k - 1] + 1) inc++;
+  if (inc < nums.length - 2) return [t.trim()];
+  const pre = lines.slice(0, marks[0]).join('\n').trim();
+  const parts = marks.map(function (start, k) {
+    const end = (k + 1 < marks.length) ? marks[k + 1] : lines.length;
+    return lines.slice(start, end).join('\n').trim();
+  }).filter(Boolean);
+  if (pre && pre.length <= 120) return parts.map(function (x) { return pre + '\n' + x; });
+  return parts;
+}
+
 async function callTranscribeAPI(cfg, item, imageMap) {
   const imageIds = (item && item.imageIds) || [];
   if (!imageIds.length) throw new Error('这道题没有图片');
@@ -1049,6 +1069,8 @@ module.exports = async function handler(req, res) {
         : ((it.prevImageIds && it.prevImageIds.length) ? it.prevImageIds : it.imageIds);
       const ocrItem = Object.assign({}, it, { imageIds: ocrIds });
       const result = await callTranscribeAPI(db.config, ocrItem, db.images);
+        const questions = splitQuestionsByNumber(result.text);
+        result.text = questions[0] || result.text;
         var oldText = String(it.question || '').trim();
         var newText = String(result.text || '').trim();
         var keptOld = false;
@@ -1064,7 +1086,7 @@ module.exports = async function handler(req, res) {
         }
         it.updatedAt = nowISO();
         await writeDB(db);
-        return sendJSON(res, 200, { ok: true, question: it.question, hasImage: result.hasImage, imageRemoved: imageRemoved, keptOld: keptOld });
+        return sendJSON(res, 200, { ok: true, question: it.question, questions: questions, hasImage: result.hasImage, imageRemoved: imageRemoved, keptOld: keptOld });
       } catch (err) {
         console.error('[transcribe]', err && err.message);
         return sendJSON(res, 500, { error: '图片转文字失败：' + (err && err.message ? err.message : err) });
