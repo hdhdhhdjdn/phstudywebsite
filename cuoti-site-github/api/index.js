@@ -789,9 +789,10 @@ module.exports = async function handler(req, res) {
       if (!db.config.gradeKey) return sendJSON(res, 400, { error: '还没有配置 AI 密钥，请管理员到「设置」里填写' });
       try {
         // 若图片被自动裁剪过，用原始整页图识别（否则只剩图形，识别出来是空的）
-      const ocrItem = (it.prevImageIds && it.prevImageIds.length)
-        ? Object.assign({}, it, { imageIds: it.prevImageIds })
-        : it;
+      const ocrIds = (it.ocrImageIds && it.ocrImageIds.length)
+        ? it.ocrImageIds
+        : ((it.prevImageIds && it.prevImageIds.length) ? it.prevImageIds : it.imageIds);
+      const ocrItem = Object.assign({}, it, { imageIds: ocrIds });
       const result = await callTranscribeAPI(db.config, ocrItem, db.images);
         var oldText = String(it.question || '').trim();
         var newText = String(result.text || '').trim();

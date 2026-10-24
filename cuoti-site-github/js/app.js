@@ -1126,7 +1126,12 @@
     }).filter(function (m) { return m.point; });
 
     ed.images.forEach(function (im) { if (!im.id) { im.id = uid(); im.isNew = true; } });
+    var __hadNewImg = ed.images.some(function (im) { return im.isNew; });
+    var __removedImg = (ed.removed || []).length > 0;
     it.imageIds = ed.images.map(function (im) { return im.id; });
+    if (__hadNewImg || __removedImg || !(it.ocrImageIds || []).length) {
+      it.ocrImageIds = it.imageIds.slice();   // OCR 专用：始终保存这次上传的原始清晰图
+    }
     it.updatedAt = new Date().toISOString();
     if (!it.createdAt) it.createdAt = it.updatedAt;
     if (!it.review) it.review = { due: todayISO(), interval: 0, ease: 2.5, reps: 0 };
