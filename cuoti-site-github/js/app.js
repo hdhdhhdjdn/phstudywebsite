@@ -951,7 +951,7 @@
 
   function insertFieldInPart(itemId, partLabel) {
     var card = document.querySelector('article.item-card[data-id="' + itemId + '"]');
-    var box = card ? card.querySelector('[data-part="' + partLabel + '"]') : null;
+    var box = card ? card.querySelector('.inline-answer-text[data-part="' + partLabel + '"]') : null;
     if (!box || !box.classList.contains('rich-answer')) {
       var boxes = $$('.rich-answer');
       box = boxes[boxes.length - 1] || null;
@@ -2371,7 +2371,7 @@
     var ta = null;
     if (state.fqPart) {
       var __card = document.querySelector('article.item-card[data-id="' + state.formulaTarget + '"]');
-      ta = __card ? __card.querySelector('[data-part="' + state.fqPart + '"]') : null;
+      ta = __card ? __card.querySelector('.inline-answer-text[data-part="' + state.fqPart + '"]') : null;
     }
     if (!ta) ta = state.fqTargetEl && document.body.contains(state.fqTargetEl) ? state.fqTargetEl : null;
     if (!ta) {
@@ -2527,7 +2527,7 @@
     for (var i = 0; i < parts.length; i++) if (parts[i].label === label) part = parts[i];
     var body = part ? part.body : '';
     var card = document.querySelector('article.item-card[data-id="' + itemId + '"]');
-    var ta = card ? card.querySelector('[data-part="' + label + '"]') : null;
+    var ta = card ? card.querySelector('.inline-answer-text[data-part="' + label + '"]') : null;
     var answerText = withAnswer && ta ? readAnswerValue(ta).trim() : '';
     if (withAnswer && !answerText) { toast('先在 (' + label + ') 框里写下答案再批改', 'err'); return; }
     toast('AI 正在处理 (' + label + ') 小题…', 'ok');
@@ -3581,6 +3581,8 @@
       }
       if (t.closest('#formula-dock')) return;
       if (t.closest('.mathfield')) return;
+      if (t.closest('[data-action="part-formula"]')) return;
+      if (t.closest('[data-action="open-formula"]')) return;
       hideFormulaDock();
     });
 
