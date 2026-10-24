@@ -349,7 +349,7 @@ async function callTagAPI(cfg, item) {
   const parts = [];
   parts.push('这是一道 IB DP 学生的错题，请判断它属于哪门学科、哪个 IB DP 知识点。');
   if (item.question) parts.push('【题目文字】\n' + item.question);
-  parts.push('学科只能从以下选择：数学 AA、数学 AI、物理、化学、生物、经济、商业管理、历史、地理、哲学、中文 A、英语 A、英语 B、TOK。');
+  parts.push('学科只能从以下选择：数学 AA、数学 AI、物理、化学、生物、经济、商业管理、历史、地理、哲学、中文 A、英语 A、英语 B、TOK。判断优先看内容：出现化学式/反应方程式/摩尔/焓变/反应速率/滴定/酸碱 → 化学；出现力/运动/电路/波/能量 → 物理；出现函数/微积分/几何/概率 → 数学。不要因为排版像数学就判数学。');
   parts.push('知识点命名：物理用 A. Space, time and motion / B. The particulate nature of matter / C. Wave behaviour / D. Fields / E. Nuclear and quantum physics（可到二级，如 D.2 Gravitational fields）；化学用 Structure 1-3 / Reactivity 1-2 主题；数学用 Number and algebra / Functions / Geometry and trigonometry / Statistics and probability / Calculus；其他用 IB 大纲 topic。最多 3 个。');
   parts.push('错因只能从这四类选一个：K 知识（概念/公式没记住或记错）、M 方法（思路/方法不会或用错）、C 计算（会做但算错/单位错/代数错）、E 表达审题（读题不清/漏条件/答非所问/表达不规范）。');
   parts.push('只输出 JSON：{"subject":"学科","topics":["知识点1"],"causes":[{"type":"K","reason":"一句话说明错在哪"}],"confidence":"high 或 medium 或 low"}');
@@ -381,8 +381,19 @@ async function callTagAPI(cfg, item) {
   if (!raw) throw modelEmptyError(data);
   const parsed = extractJSON(raw);
   if (!parsed) throw new Error('模型返回的不是合法 JSON');
+  var __subj = String(parsed.subject || '').trim();
+  var hay = String(item.question || '');
+  function scoreOf(re) { var m = hay.match(re); return m ? m.length : 0; }
+  var chemScore = scoreOf(/chemical|reaction|acid|alkali|enthalpy|mole|titrat|equilibrium|oxid|redox|electrolys|calorimet|concentration|NaOH|HCl|H2SO4|KMnO4|H2O2|CO2|H2O|NH3|CuSO4|Br2|KCl|NaCl|mol dm|mol\s*dm/gi);
+  var physScore = scoreOf(/velocity|acceleration|force|momentum|friction|circuit|voltage|current|resistance|wavelength|photon|capacitor|magnetic|electric field|pressure|density|moment of inertia|angular|kinetic energy|potential energy|newton|joule|ohm/gi);
+  var mathScore = scoreOf(/integral|derivative|differentiat|matrix|vector|probabilit|trigonometric|logarithm|polynomial|function f|gradient|geometric|series/gi);
+  var formulaScore = (hay.match(/[A-Z][a-z]?\d+(?:\([a-z]+\))?/g) || []).length;
+  if (chemScore + formulaScore * 0.5 > Math.max(physScore, mathScore) && chemScore + formulaScore * 0.5 >= 2) __subj = '化学';
+  else if (physScore > Math.max(chemScore + formulaScore * 0.5, mathScore) && physScore >= 2) __subj = '物理';
+  else if (!__subj) __subj = '其他';
+
   return {
-    subject: String(parsed.subject || '').trim(),
+    subject: __subj,
     topics: Array.isArray(parsed.topics) ? parsed.topics.map(function (t) { return String(t).trim(); }).filter(Boolean).slice(0, 3) : [],
     causes: Array.isArray(parsed.causes) ? parsed.causes.map(function (c) {
       return { type: String((c && c.type) || 'K').toUpperCase().charAt(0), reason: String((c && c.reason) || '') };
@@ -798,9 +809,7 @@ async function handleAPI(req, res, pathname, url) {
     if (!cfg.gradeKey) return sendJSON(res, 400, { error: '还没有配置 AI 密钥，请管理员到「设置」里填写' });
     try {
       const result = await callTagAPI(cfg, it);
-      if (!it.subject || it.subject === '其他') {
-        if (result.subject) it.subject = result.subject;
-      }
+      if (result.subject && !it.subjectLocked) it.subject = result.subject;
       const subject = it.subject || result.subject || '其他';
       it.topics = it.topics || [];
       const added = [];
