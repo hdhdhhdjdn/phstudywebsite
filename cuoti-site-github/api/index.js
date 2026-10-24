@@ -188,7 +188,11 @@ async function writeDBRedis(db) {
   // 执行（逐条原子，并发时不会互相覆盖整库）
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i];
-    if (op[0] === 'hset') await kv.hset(op[1], op[2], op[3]);
+    if (op[0] === 'hset') {
+      const obj = {};
+      obj[op[2]] = op[3];
+      await kv.hset(op[1], obj);
+    }
     else if (op[0] === 'hdel') await kv.hdel(op[1], op[2]);
     else if (op[0] === 'set') await kv.set(op[1], op[2]);
   }
