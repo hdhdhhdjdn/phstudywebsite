@@ -54,12 +54,14 @@ const BLOB_DB_PATH = 'cuoti/db.json';
 let blobWriteChain = Promise.resolve();
 
 async function readDBFromBlob() {
+  if (lastWrittenDB && Date.now() - lastWrittenAt < 1500) return lastWrittenDB;
   try {
     const { list } = require('@vercel/blob');
     const res = await list({ prefix: BLOB_DB_PATH, limit: 1 });
     const blob = res && res.blobs && res.blobs[0];
     if (!blob || !blob.url) return null;
-    const r = await fetch(blob.url, { cache: 'no-store' });
+    const bust = blob.url + (blob.url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    const r = await fetch(bust, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } });
     if (!r.ok) return null;
     const txt = await r.text();
     if (!txt) return null;
@@ -70,6 +72,9 @@ async function readDBFromBlob() {
   }
 }
 
+let lastWrittenDB = null;
+let lastWrittenAt = 0;
+
 async function writeDBToBlob(db) {
   const { put } = require('@vercel/blob');
   await put(BLOB_DB_PATH, JSON.stringify(db), {
@@ -78,6 +83,8 @@ async function writeDBToBlob(db) {
     addRandomSuffix: false,
     contentType: 'application/json'
   });
+  lastWrittenDB = db;
+  lastWrittenAt = Date.now();
 }
 
 async function readDB() {
