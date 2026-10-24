@@ -703,3 +703,10 @@ body.has-dock { padding-bottom: 180px; }
 .mathfield .mv { font-style: italic; font-family: KaTeX_Math, "Cambria Math", "Times New Roman", serif; }
 .mathfield .mn { font-style: normal; }
 .mathfield sup, .mathfield sub { font-size: 0.72em; }
+/* 公式框：整段实时渲染成数学公式 */
+.mathfield { position: relative; display: inline-block; min-width: 140px; min-height: 30px; padding: 3px 8px; margin: 0 3px; background: #f3f5f8; border: 1px solid #cfd8e3; border-radius: 5px; vertical-align: middle; font-family: "Cambria Math", KaTeX_Main, "Times New Roman", serif; }
+.mathfield:focus-within { background: #fff; border-color: #7aa7ff; box-shadow: 0 0 0 2px rgba(90,140,255,.18); }
+.mathfield .mf-render { position: relative; z-index: 1; font-size: 16px; color: #1f2733; pointer-events: none; white-space: nowrap; }
+.mathfield .mf-render.mf-empty { color: #98a2b3; font-size: 14px; }
+.mathfield .mf-src { position: absolute; left: 8px; right: 8px; top: 3px; bottom: 3px; z-index: 2; color: transparent; caret-color: #0b5cff; outline: none; white-space: nowrap; overflow: hidden; font-size: 16px; font-family: "Cambria Math", KaTeX_Main, "Times New Roman", serif; }
+.mathfield .mf-src:empty:before { content: attr(data-ph); color: transparent; }
