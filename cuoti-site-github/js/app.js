@@ -900,7 +900,7 @@
         html += '<div class="fd-group-title">' + esc(g.title) + '</div><div class="fd-tpl-grid">';
         g.items.forEach(function (it) {
           var preview = '';
-          var texPrev = String(it.tex).replace(/\{\}/g, '{\\mathstrut}').replace(/&(\s*)&/g, '&{\\mathstrut}$1&');
+          var texPrev = String(it.tex).replace(/\{\}/g, '{\\square}').replace(/&(\s*)&/g, '&{\\square}$1&');
           try { preview = safeMathHTML('$' + texPrev + '$'); } catch (e) { preview = esc(it.label); }
           if (!preview || !preview.trim()) preview = esc(it.label);
           html += '<button type="button" class="fd-tpl" data-dock-tex="' + encodeURIComponent(it.tex) + '" title="' + esc(it.label) + '">' + preview + '</button>';
@@ -3936,9 +3936,9 @@
         var fldT = activeMathField();
         var texT = decodeURIComponent(tplBtn.getAttribute('data-dock-tex') || '');
         if (texT) {
-          texT = texT.replace(/\{\}/g, '{\\mathstrut}');
-          texT = texT.replace(/&(\s*)&/g, '&{\\mathstrut}$1&');
-          texT = texT.replace(/&(\s*)\\\\/g, '&{\\mathstrut}$1\\\\');
+          texT = texT.replace(/\{\}/g, '{\\placeholder{}}');
+          texT = texT.replace(/&(\s*)&/g, '&{\\placeholder{}}$1&');
+          texT = texT.replace(/&(\s*)\\\\/g, '&{\\placeholder{}}$1\\\\');
         }
         if (fldT && texT) insertLatexIntoField(fldT, texT);
         return;
