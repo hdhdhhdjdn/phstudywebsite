@@ -756,3 +756,31 @@ math-field.mathfield::part(menu-toggle) { display: none; }
 .mathfield .mf-render .mf-ph { color: #98a2b3; font-size: 15px; font-family: inherit; }
 .mathfield .mf-input { position: absolute; left: 10px; right: 10px; top: 5px; height: 28px; padding: 0; margin: 0; border: none; outline: none; background: transparent; resize: none; overflow: hidden; color: transparent; caret-color: #0b5cff; font-size: 19px; font-family: KaTeX_Main, "Cambria Math", serif; white-space: pre; }
 .mathfield .mf-input::placeholder { color: transparent; }
+/* 公式框：输入时显示原文，写完（失焦）再显示渲染后的公式 */
+.mathfield { min-height: 40px; }
+.mathfield .mf-input {
+  position: static;
+  display: block;
+  width: 100%;
+  min-width: 180px;
+  height: auto;
+  min-height: 26px;
+  padding: 2px 4px;
+  border: none;
+  outline: none;
+  background: #fff;
+  border-radius: 4px;
+  resize: vertical;
+  overflow: hidden;
+  color: #1f2733;
+  caret-color: #0b5cff;
+  font-size: 15px;
+  line-height: 1.5;
+  font-family: "Consolas", "Courier New", monospace;
+  white-space: pre-wrap;
+}
+.mathfield .mf-input::placeholder { color: #98a2b3; }
+.mathfield .mf-render { display: none; }
+.mathfield:not(:focus-within) .mf-render { display: block; }
+.mathfield:focus-within .mf-render { display: none; }
+.mathfield:not(:focus-within) .mf-input { display: none; }
