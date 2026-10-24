@@ -408,7 +408,8 @@ async function callTranscribeAPI(cfg, item, imageMap) {
       '5. 方程组请写成 LaTeX 的 cases 多行环境（每行一个方程，行与行之间用两个反斜杠分隔）\n' +
       '6. 如果图片里有多道题，按顺序全部输出\n' +
       '7. 不要使用 Markdown 符号（*、#、`）\n' +
-      'hasImage 含义：这道题是否包含"必须看图才能作答"的内容（几何图形、函数图像、坐标图、数据表格、实验装置图、示意图等）。\n' +
+
+      '8. 如果提供了多张图片（多页），必须按顺序识别每一张图片的全部内容，页与页之间空一行，不要只识别第一张\n' +      'hasImage 含义：这道题是否包含"必须看图才能作答"的内容（几何图形、函数图像、坐标图、数据表格、实验装置图、示意图等）。\n' +
       '如果纯文字就能完整表达题目（如解方程、文字应用题、纯公式推导），hasImage 为 false。\n' +
       '只输出 JSON，不要输出其它内容。'
   }];
@@ -431,7 +432,7 @@ async function callTranscribeAPI(cfg, item, imageMap) {
         { role: 'user', content: content }
       ],
       temperature: 0.1,
-      max_tokens: 3000
+      max_tokens: 4000
     })
   });
   if (!resp.ok) {

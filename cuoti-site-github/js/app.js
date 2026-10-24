@@ -1523,6 +1523,7 @@
     if (!state.cloud || typeof Cloud === 'undefined') { toast('需要班级服务器模式', 'err'); return; }
     var it = byId(state.items, 'id', itemId);
     if (!it || !(it.imageIds || []).length) { toast('这道题没有图片', 'err'); return; }
+    if ((it.imageIds || []).length > 1) { return; } // 多页题目不裁剪（否则会把其他页删掉）
     toast('AI 正在定位图形区域…', 'ok');
 
     Cloud.detectFigure(itemId).then(function (res) {
@@ -1785,9 +1786,13 @@
           toast('已转成文字；AI 判断这题不含图表，已自动移除原图', 'ok');
           return;
         }
-        toast('已转成文字，正在自动裁剪图形…', 'ok');
-        // 有图表：直接接着自动裁剪出图形区域
-        setTimeout(function () { autoCropFigure(itemId); }, 200);
+        var cur = byId(state.items, 'id', itemId);
+        if (cur && (cur.imageIds || []).length === 1) {
+          toast('已转成文字，正在自动裁剪图形…', 'ok');
+          setTimeout(function () { autoCropFigure(itemId); }, 200);
+        } else {
+          toast('已转成文字（多页题目已全部保留）', 'ok');
+        }
       });
     }).catch(function (e) {
       toast('识别失败：' + (e && e.message ? e.message : e), 'err');
