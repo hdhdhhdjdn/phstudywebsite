@@ -46,6 +46,7 @@
     progress: {},
     answerImages: {},
     formulaTarget: null,
+    transcribing: {},
     fqTab: 'num',
     fqHistory: [],
     cloud: false,
@@ -822,6 +823,7 @@
         '<span class="badge ' + subjectClass(it.subject) + '">' + esc(it.subject || '其他') + '</span>' +
         '<span class="badge st-' + esc(statusOf(it.id)) + '">' + esc(statusLabel(statusOf(it.id))) + '</span>' +
         '<span class="badge diff">' + diffStars + '</span>' +
+        (state.transcribing && state.transcribing[it.id] ? '<span class="badge st-new">🤖 识别文字中…</span>' : '') +
         '<span class="item-source">' + esc(it.source || '') + '</span>' +
         ownerChip +
         '<span class="grow"></span>' +
@@ -1142,35 +1144,46 @@
       return DataStore.del('images', id);
     });
 
+    // ===== 立刻上屏：先关弹窗、卡片先显示（图片用本地预览），上传在后台继续 =====
+    ed.images.forEach(function (im) {
+      if (im.blob && !state.imageUrls[im.id]) {
+        try { state.imageUrls[im.id] = URL.createObjectURL(im.blob); } catch (e) {}
+      }
+    });
+    state.items = state.items.filter(function (x) { return x.id !== it.id; });
+    state.items.push(it);
+    hideModal('modal-editor');
+    state.editing = null;
+    state.filters = { subject: '', topic: '', cause: '', status: '', q: '' };
+    ['#f-subject', '#f-topic', '#f-cause', '#f-status', '#f-search'].forEach(function (sel) {
+      var el = $(sel);
+      if (el) el.value = '';
+    });
+    rebuildFilters();
+    renderCurrent();
+    refreshReviewCounts();
+    toast('已保存，正在上传图片…', 'ok');
+
     Promise.all(writes.concat(dels)).then(function () {
       return DataStore.put('items', it);
     }).then(function (saved) {
-      if (saved && saved.id) it = saved; // 云端会补上 ownerId / ownerName
-      var __st = $('#e-status').value || 'new';
-      if (__st === 'new' && !statusOf(it.id)) return null;   // 默认"未掌握"时无需额外写入，避免覆盖刚保存的题目
+      if (saved && saved.id) {
+        it = Object.assign({}, it, saved); // 云端会补 ownerId / ownerName
+        state.items = state.items.filter(function (x) { return x.id !== it.id; });
+        state.items.push(it);
+        renderCurrent();
+      }
+      var __st = it.status || 'new';
+      if (__st === 'new' && !statusOf(it.id)) return null; // 默认状态不重复写库
       return saveProgress(it.id, { status: __st });
     }).then(function () {
-      state.items = state.items.filter(function (x) { return x.id !== it.id; });
-      state.items.push(it);
-      hideModal('modal-editor');
-      state.editing = null;
-      rebuildFilters();
-      renderCurrent();
-      refreshReviewCounts();
-      // 保存后清空筛选，避免新题被过滤掉看不到
-      state.filters = { subject: '', topic: '', cause: '', status: '', q: '' };
-      ['#f-subject', '#f-topic', '#f-cause', '#f-status', '#f-search'].forEach(function (sel) {
-        var el = $(sel);
-        if (el) el.value = '';
-      });
-      renderCurrent();
-      toast('已保存', 'ok');
-      // 新上传且带图片、题干为空 → 自动转文字（转完会自动裁剪图形）
+      toast('保存完成', 'ok');
+      // 新上传且带图片、题干为空 → 自动转文字（转完自动裁剪图形）
       if ((it.imageIds || []).length && !(it.question || '').trim() && state.cloud &&
           typeof Cloud !== 'undefined' && Cloud.health && Cloud.health.autoGrade) {
         setTimeout(function () {
           if (byId(state.items, 'id', it.id)) transcribeItem(it.id);
-        }, 400);
+        }, 300);
       }
     }).catch(function (e) {
       console.error(e);
@@ -1725,6 +1738,9 @@
       });
     }).catch(function (e) {
       toast('识别失败：' + (e && e.message ? e.message : e), 'err');
+    }).then(function () {
+      if (state.transcribing) delete state.transcribing[itemId];
+      renderCurrent();
     });
   }
 
@@ -1755,6 +1771,9 @@
 
   function transcribeItem(itemId) {
     if (!state.cloud || typeof Cloud === 'undefined') { toast('图片转文字需要班级服务器模式', 'err'); return; }
+    state.transcribing = state.transcribing || {};
+    state.transcribing[itemId] = true;
+    renderCurrent();
     toast('正在识别图片文字，请稍候…', 'ok');
     Cloud.transcribe(itemId).then(function (res) {
       return bootData().then(function () {
@@ -1768,6 +1787,9 @@
       });
     }).catch(function (e) {
       toast('识别失败：' + (e && e.message ? e.message : e), 'err');
+    }).then(function () {
+      if (state.transcribing) delete state.transcribing[itemId];
+      renderCurrent();
     });
   }
 
