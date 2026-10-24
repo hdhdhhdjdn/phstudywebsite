@@ -107,11 +107,24 @@ function rHash(name) { return 'cuoti:coll:' + name; }
 const R_SESSIONS = 'cuoti:sessions';
 const R_CONFIG = 'cuoti:config';
 
-function hashToRecords(hash) {
+function hashToMap(hash) {
+  const map = {};
+  if (!hash) return map;
+  if (Array.isArray(hash)) {
+    for (let i = 0; i + 1 < hash.length; i += 2) map[String(hash[i])] = hash[i + 1];
+  } else {
+    Object.keys(hash).forEach(function (k) { map[k] = hash[k]; });
+  }
+  return map;
+}
+
+function mapToRecords(map) {
   const out = [];
-  if (!hash) return out;
-  Object.keys(hash).forEach(function (k) {
-    try { out.push(JSON.parse(hash[k])); } catch (e) {}
+  Object.keys(map || {}).forEach(function (k) {
+    try {
+      const v = JSON.parse(map[k]);
+      if (v && typeof v === 'object') out.push(v);
+    } catch (e) {}
   });
   return out;
 }
@@ -123,26 +136,33 @@ async function readDBRedis() {
   requests.push(kv.hgetall(R_SESSIONS));
   requests.push(kv.get(R_CONFIG));
   const res = await Promise.all(requests);
+
   const db = emptyDB();
   const snap = { colls: {}, sessions: {}, config: null };
 
   for (let i = 0; i < names.length; i++) {
     const name = names[i];
-    const hash = res[i] || {};
-    const list = hashToRecords(hash);
-    db[name] = list;
-    snap.colls[name] = Object.assign({}, hash);
+    const map = hashToMap(res[i]);
+    db[name] = mapToRecords(map);
+    snap.colls[name] = map;
   }
+
+  const sessMap = hashToMap(res[names.length]);
   db.sessions = {};
-  const sessHash = res[names.length] || {};
-  Object.keys(sessHash).forEach(function (token) {
-    try { db.sessions[token] = JSON.parse(sessHash[token]); } catch (e) {}
+  Object.keys(sessMap).forEach(function (token) {
+    try { db.sessions[token] = JSON.parse(sessMap[token]); } catch (e) {}
   });
-  snap.sessions = Object.assign({}, sessHash);
+  snap.sessions = sessMap;
 
   const cfg = res[names.length + 1];
-  if (cfg && typeof cfg === 'object') db.config = Object.assign(db.config, cfg);
-  snap.config = cfg ? JSON.stringify(cfg) : null;
+  if (cfg) {
+    let parsed = cfg;
+    if (typeof cfg === 'string') { try { parsed = JSON.parse(cfg); } catch (e) { parsed = null; } }
+    if (parsed && typeof parsed === 'object') db.config = Object.assign(db.config, parsed);
+    snap.config = JSON.stringify(parsed || {});
+  } else {
+    snap.config = null;
+  }
 
   db.__snap = snap;
   return db;
