@@ -293,6 +293,33 @@
   </div>
 </div>
 
+<!-- ============ 公式编辑器 ============ -->
+<div id="modal-formula" class="modal hidden">
+  <div class="modal-mask" data-action="close-formula"></div>
+  <div class="modal-box wide formula-box">
+    <div class="modal-head">
+      <h2>插入数学公式</h2>
+      <button class="icon-btn" data-action="close-formula" title="关闭">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="formula-preview" id="formula-preview"></div>
+      <textarea id="formula-input" rows="2" placeholder="输入 LaTeX，或用下方键盘点选（例如 \frac{dy}{dx}、\int_0^1 x^2\,dx、\begin{cases} x+y=1 \\ x-y=0 \end{cases}）"></textarea>
+      <div class="fq-quick" id="formula-quick"></div>
+      <div class="fq-tabs" id="formula-tabs"></div>
+      <div class="fq-pad" id="formula-pad"></div>
+      <div class="fq-tools">
+        <button class="btn tiny" data-fqact="undo">↶ 撤销</button>
+        <button class="btn tiny" data-fqact="backspace">⌫ 退格</button>
+        <button class="btn tiny" data-fqact="clear">清空</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" data-action="close-formula">取消</button>
+      <button class="btn primary" data-action="insert-formula">插入到作答</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ 图片查看 ============ -->
 <div id="modal-image" class="modal hidden">
   <div class="modal-mask" data-action="close-image"></div>
