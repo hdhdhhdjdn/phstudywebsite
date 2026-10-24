@@ -718,3 +718,19 @@ body.has-dock { padding-bottom: 180px; }
 .mathfield .mfrac .fnum { border-bottom: 1px solid currentColor; padding: 0 3px; }
 .mathfield .mfrac .fden { padding: 0 3px; }
 .mathfield:empty:before { content: attr(data-ph); color: #98a2b3; font-style: normal; }
+/* 公式框：整框强制数学字体（所有字符都是公式样式） */
+.mathfield {
+  font-family: "Cambria Math", "Latin Modern Math", "Times New Roman", KaTeX_Main, serif !important;
+  font-size: 17px !important;
+  font-style: italic;
+  letter-spacing: 0.2px;
+}
+.mathfield i, .mathfield .mv, .mathfield em { font-style: italic !important; font-family: "Cambria Math", "Times New Roman", serif !important; }
+.mathfield sup, .mathfield sub { font-size: 0.72em !important; line-height: 0 !important; font-style: italic; }
+.mathfield .mathchip, .mathfield .mfrac, .mathfield .mw {
+  background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 1px !important;
+  font-family: "Cambria Math", "Times New Roman", serif !important;
+}
+.mathfield .mfrac .fnum { border-bottom: 1px solid currentColor; padding: 0 3px; }
+.mathfield .mfrac .fden { padding: 0 3px; }
+.mathfield:empty:before { content: attr(data-ph); color: #98a2b3; font-style: normal; }
