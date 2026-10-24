@@ -918,6 +918,21 @@
 
   function makeMathField() {
     initMathLive();
+    var ok = false;
+    try { ok = !!(window.customElements && window.customElements.get('math-field')); } catch (e) { ok = false; }
+    if (!ok) {
+      // 兜底：MathLive 没加载成功时用普通可编辑框，保证能输入
+      var span = document.createElement('span');
+      span.className = 'mathfield mathfield-fallback';
+      span.setAttribute('contenteditable', 'true');
+      span.setAttribute('data-ph', '在此处键入公式。');
+      span.setAttribute('spellcheck', 'false');
+      if (!state._mfWarned) {
+        state._mfWarned = true;
+        setTimeout(function () { toast('公式编辑器加载失败，已切换为简易输入框（刷新页面重试）', 'err'); }, 300);
+      }
+      return span;
+    }
     var mf = document.createElement('math-field');
     mf.className = 'mathfield';
     mf.setAttribute('virtual-keyboard-mode', 'manual');
@@ -1020,19 +1035,24 @@
     if (!box) return false;
     box.focus();
     var field = makeMathField();
+    field.setAttribute('tabindex', '0');
+    var wrap = document.createElement('span');
+    wrap.className = 'mf-wrap';
+    wrap.setAttribute('contenteditable', 'false');
+    wrap.appendChild(field);
     var sel = window.getSelection();
     if (sel && sel.rangeCount && box.contains(sel.getRangeAt(0).startContainer)) {
       var r = sel.getRangeAt(0);
       r.deleteContents();
-      r.insertNode(field);
+      r.insertNode(wrap);
     } else {
-      box.appendChild(field);
+      box.appendChild(wrap);
     }
     var srcEl = field;
     var nr = document.createRange();
     nr.setStart(srcEl || field, 0); nr.collapse(true);
     if (sel) { sel.removeAllRanges(); sel.addRange(nr); }
-    if (srcEl) srcEl.focus();
+    if (srcEl) { try { srcEl.focus(); } catch (e) {} }
     showFormulaDock();
     updateMathFieldRender(field);
     return true;
@@ -1049,6 +1069,11 @@
     if (!rich) return false;
     rich.focus();
     var field = makeMathField();
+    field.setAttribute('tabindex', '0');
+    var wrap = document.createElement('span');
+    wrap.className = 'mf-wrap';
+    wrap.setAttribute('contenteditable', 'false');
+    wrap.appendChild(field);
     var range = null;
     if (sel && sel.rangeCount && rich.contains(sel.getRangeAt(0).startContainer)) range = sel.getRangeAt(0);
     if (range) {
@@ -1135,7 +1160,9 @@
     Array.prototype.slice.call(el.childNodes).forEach(function (node) {
       if (node.nodeType === 3) { out += node.nodeValue; return; }
       if (node.nodeType !== 1) return;
-      if (node.tagName === 'MATH-FIELD') {
+      if (node.querySelector && node.querySelector('math-field')) {
+        out += '$' + fieldTex(node.querySelector('math-field')) + '$';
+      } else if (node.tagName === 'MATH-FIELD') {
         out += '$' + fieldTex(node) + '$';
       } else if (node.classList && node.classList.contains('mathfield')) {
         out += '$' + fieldTex(node) + '$';

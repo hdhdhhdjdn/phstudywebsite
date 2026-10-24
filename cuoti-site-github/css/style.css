@@ -740,3 +740,6 @@ math-field.mathfield:focus-within { background: #fff; border-color: #7aa7ff; box
 math-field.mathfield::part(virtual-keyboard-toggle) { display: none; }
 math-field.mathfield::part(menu-toggle) { display: none; }
 .mathfield .mf-render, .mathfield .mf-src { display: none; }
+/* 公式框包裹层（避免外层 contenteditable 吞键盘） */
+.mf-wrap { display: inline-block; vertical-align: middle; margin: 0 3px; }
+.mf-wrap math-field { display: inline-block; }
