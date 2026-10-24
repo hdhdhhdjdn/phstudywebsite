@@ -101,26 +101,103 @@ async function writeDBToBlob(db) {
   cachedAt = Date.now();
 }
 
+// ---------------- Redis 逐条存储（并发安全） ----------------
+const R_COLLS = ['users', 'items', 'topics', 'inbox', 'submissions', 'progress'];
+function rHash(name) { return 'cuoti:coll:' + name; }
+const R_SESSIONS = 'cuoti:sessions';
+const R_CONFIG = 'cuoti:config';
+
+function hashToRecords(hash) {
+  const out = [];
+  if (!hash) return out;
+  Object.keys(hash).forEach(function (k) {
+    try { out.push(JSON.parse(hash[k])); } catch (e) {}
+  });
+  return out;
+}
+
+async function readDBRedis() {
+  const kv = require('@vercel/kv').kv;
+  const names = R_COLLS;
+  const requests = names.map(function (name) { return kv.hgetall(rHash(name)); });
+  requests.push(kv.hgetall(R_SESSIONS));
+  requests.push(kv.get(R_CONFIG));
+  const res = await Promise.all(requests);
+  const db = emptyDB();
+  const snap = { colls: {}, sessions: {}, config: null };
+
+  for (let i = 0; i < names.length; i++) {
+    const name = names[i];
+    const hash = res[i] || {};
+    const list = hashToRecords(hash);
+    db[name] = list;
+    snap.colls[name] = Object.assign({}, hash);
+  }
+  db.sessions = {};
+  const sessHash = res[names.length] || {};
+  Object.keys(sessHash).forEach(function (token) {
+    try { db.sessions[token] = JSON.parse(sessHash[token]); } catch (e) {}
+  });
+  snap.sessions = Object.assign({}, sessHash);
+
+  const cfg = res[names.length + 1];
+  if (cfg && typeof cfg === 'object') db.config = Object.assign(db.config, cfg);
+  snap.config = cfg ? JSON.stringify(cfg) : null;
+
+  db.__snap = snap;
+  return db;
+}
+
+async function writeDBRedis(db) {
+  const kv = require('@vercel/kv').kv;
+  const snap = db.__snap || { colls: {}, sessions: {}, config: null };
+  const ops = [];
+
+  R_COLLS.forEach(function (name) {
+    const list = db[name] || [];
+    const prev = snap.colls[name] || {};
+    const cur = {};
+    list.forEach(function (rec) {
+      if (!rec || !rec.id) return;
+      const json = JSON.stringify(rec);
+      cur[rec.id] = json;
+      if (prev[rec.id] !== json) ops.push(['hset', rHash(name), rec.id, json]);
+    });
+    Object.keys(prev).forEach(function (id) {
+      if (!(id in cur)) ops.push(['hdel', rHash(name), id]);
+    });
+    snap.colls[name] = cur;
+  });
+
+  const sess = db.sessions || {};
+  const prevS = snap.sessions || {};
+  const curS = {};
+  Object.keys(sess).forEach(function (token) {
+    const json = JSON.stringify(sess[token]);
+    curS[token] = json;
+    if (prevS[token] !== json) ops.push(['hset', R_SESSIONS, token, json]);
+  });
+  Object.keys(prevS).forEach(function (token) {
+    if (!(token in curS)) ops.push(['hdel', R_SESSIONS, token]);
+  });
+  snap.sessions = curS;
+
+  const cfgJson = JSON.stringify(db.config || {});
+  if (cfgJson !== snap.config) { ops.push(['set', R_CONFIG, db.config || {}]); snap.config = cfgJson; }
+
+  // 执行（逐条原子，并发时不会互相覆盖整库）
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i];
+    if (op[0] === 'hset') await kv.hset(op[1], op[2], op[3]);
+    else if (op[0] === 'hdel') await kv.hdel(op[1], op[2]);
+    else if (op[0] === 'set') await kv.set(op[1], op[2]);
+  }
+  db.__snap = snap;
+}
+
 async function readDB() {
   if (useKV()) {
-    const kv = require('@vercel/kv').kv;
-    try {
-      const meta = await kv.get(DB_META_KEY);
-      if (meta && meta.v === 2 && meta.chunks > 0) {
-        const keys = [];
-        for (let i = 0; i < meta.chunks; i++) keys.push(DB_CHUNK_PREFIX + i);
-        const parts = await kv.mget(keys);
-        const raw = (parts || []).filter(function (x) { return typeof x === 'string'; }).join('');
-        if (raw) return JSON.parse(raw);
-      }
-      // 兼容旧版单键
-      const legacy = await kv.get(DB_KEY);
-      if (typeof legacy === 'string') return JSON.parse(legacy);
-      if (legacy && typeof legacy === 'object') return legacy;
-    } catch (e) {
-      console.error('[kv] read failed:', e && e.message);
-    }
-    return emptyDB();
+    try { return await readDBRedis(); } catch (e) { console.error('[redis] read failed:', e && e.message); return emptyDB(); }
   }
   if (useBlob()) {
     const fromBlob = await readDBFromBlob();
@@ -133,25 +210,7 @@ async function readDB() {
 
 async function writeDB(db) {
   if (useKV()) {
-    const kv = require('@vercel/kv').kv;
-    const raw = JSON.stringify(db);
-    const chunks = splitByBytes(raw, CHUNK_BYTES);
-    const prev = await kv.get(DB_META_KEY);
-    const prevChunks = (prev && prev.v === 2 && prev.chunks) || 0;
-    for (let i = 0; i < chunks.length; i++) {
-      await kv.set(DB_CHUNK_PREFIX + i, chunks[i]);
-    }
-    // 清理收缩后多余的旧分块
-    for (let i = chunks.length; i < prevChunks; i++) {
-      await kv.del(DB_CHUNK_PREFIX + i);
-    }
-    await kv.set(DB_META_KEY, {
-      v: 2,
-      chunks: chunks.length,
-      size: Buffer.byteLength(raw, 'utf8'),
-      updatedAt: new Date().toISOString()
-    });
-    return;
+    try { await writeDBRedis(db); return; } catch (e) { console.error('[redis] write failed:', e && e.message); }
   }
   if (useBlob()) {
     blobWriteChain = blobWriteChain
@@ -182,7 +241,7 @@ function emptyDB() {
 
 function normalizeDB(db) {
   const base = emptyDB();
-  return Object.assign(base, db || {}, {
+  const out = Object.assign(base, db || {}, {
     users: (db && db.users) || [],
     items: (db && db.items) || [],
     topics: (db && db.topics) || [],
@@ -193,6 +252,8 @@ function normalizeDB(db) {
     images: (db && db.images) || {},
     config: Object.assign(base.config, (db && db.config) || {})
   });
+  if (db && db.__snap) out.__snap = db.__snap;
+  return out;
 }
 
 async function saveImage(id, buffer, contentType) {
@@ -490,7 +551,7 @@ module.exports = async function handler(req, res) {
         version: 1,
         serverless: true,
         blob: useBlob() ? 'blob' : 'memory',
-      storage: useKV() ? 'kv' : (useBlob() ? 'blob-json' : 'memory'),
+      storage: useKV() ? 'redis' : (useBlob() ? 'blob-json' : 'memory'),
         ocr: 'multi-page-v3',
         registerCodeRequired: !!REGISTER_CODE,
         autoGrade: !!db.config.gradeKey
