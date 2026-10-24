@@ -784,6 +784,116 @@
 
   // ---------- 富文本答题框（框内直接显示公式） ----------
   // ---------- Word 式公式框 ----------
+  // ---------- 底部公式符号栏 ----------
+  var DOCK_GROUPS = [
+    { title: '运算', keys: ['+', '−', '±', '×', '÷', '=', '≠', '≈', '≡', '≤', '≥', '<', '>', '∞', '%', '∝', '⇒', '⇔', '∴', '∵'] },
+    { title: '字母', keys: ['x', 'y', 'z', 'a', 'b', 'c', 'n', 'm', 't', 'v', 'u', 's', 'f', 'q', 'I', 'R', 'V', 'T', 'p', 'P'] },
+    { title: '希腊', keys: ['α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'λ', 'μ', 'ν', 'π', 'ρ', 'σ', 'τ', 'φ', 'ω', 'Δ', 'Ω', '∂', '∇'] },
+    { title: '单位', keys: ['°C', '°F', 'K', 'mol', 'dm', 'cm', 'mm', 'm', 's', 'kg', 'g', 'J', 'kJ', 'N', 'Pa', 'V', 'A', 'W', 'Hz', 'C', 'mol dm-3'] },
+    { title: '结构', structs: [
+      { k: 'frac', label: '分式 a/b' },
+      { k: 'sup', label: '上标 x²' },
+      { k: 'sub', label: '下标 x₂' },
+      { k: 'sqrt', label: '根号 √' },
+      { k: 'int', label: '积分 ∫' },
+      { k: 'sum', label: '求和 ∑' },
+      { k: 'lim', label: '极限 lim' },
+      { k: 'paren', label: '括号 ( )' },
+      { k: 'matrix', label: '矩阵 [ ]' }
+    ] }
+  ];
+
+  function renderFormulaDock() {
+    var box = $('#fd-inner');
+    if (!box || box.getAttribute('data-ready')) return;
+    var html = '';
+    DOCK_GROUPS.forEach(function (g) {
+      html += '<div class="fd-group"><div class="fd-title">' + esc(g.title) + '</div><div class="fd-keys">';
+      if (g.keys) {
+        g.keys.forEach(function (k) {
+          html += '<button type="button" class="fd-key" data-dock-key="' + esc(k) + '">' + esc(k) + '</button>';
+        });
+      }
+      if (g.structs) {
+        g.structs.forEach(function (s) {
+          html += '<button type="button" class="fd-key fd-struct" data-dock-struct="' + esc(s.k) + '">' + esc(s.label) + '</button>';
+        });
+      }
+      html += '</div></div>';
+    });
+    box.innerHTML = html;
+    box.setAttribute('data-ready', '1');
+  }
+
+  function showFormulaDock() {
+    renderFormulaDock();
+    var dock = $('#formula-dock');
+    if (dock) dock.classList.remove('hidden');
+    document.body.classList.add('has-dock');
+  }
+
+  function hideFormulaDock() {
+    var dock = $('#formula-dock');
+    if (dock) dock.classList.add('hidden');
+    document.body.classList.remove('has-dock');
+  }
+
+  function activeMathField() {
+    var ae = document.activeElement;
+    if (ae && ae.classList && ae.classList.contains('mathfield')) return ae;
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return null;
+    var node = sel.getRangeAt(0).startContainer;
+    var el = node.nodeType === 1 ? node : node.parentNode;
+    return el && el.closest ? el.closest('.mathfield') : null;
+  }
+
+  function dockInsertText(field, txt) {
+    field.focus();
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !field.contains(sel.getRangeAt(0).startContainer)) {
+      field.appendChild(document.createTextNode(txt));
+      return;
+    }
+    var r = sel.getRangeAt(0);
+    r.deleteContents();
+    var tn = document.createTextNode(txt);
+    r.insertNode(tn);
+    var nr = document.createRange();
+    nr.setStart(tn, tn.nodeValue.length); nr.collapse(true);
+    sel.removeAllRanges(); sel.addRange(nr);
+  }
+
+  function dockInsertStruct(field, kind) {
+    field.focus();
+    var sel = window.getSelection();
+    var r = (sel && sel.rangeCount && field.contains(sel.getRangeAt(0).startContainer)) ? sel.getRangeAt(0) : null;
+    var node = null;
+    if (kind === 'frac') {
+      node = document.createElement('span');
+      node.className = 'mfrac';
+      var nu = document.createElement('span'); nu.className = 'fnum';
+      var de = document.createElement('span'); de.className = 'fden'; de.textContent = '';
+      node.appendChild(nu); node.appendChild(de);
+    } else if (kind === 'sup') { node = document.createElement('sup'); }
+    else if (kind === 'sub') { node = document.createElement('sub'); }
+    else if (kind === 'sqrt') { node = document.createElement('span'); node.innerHTML = '√<span class="mf-paren">(</span><span class="mf-slot"></span><span class="mf-paren">)</span>'; }
+    else if (kind === 'int') { node = document.createElement('span'); node.innerHTML = '∫<span class="mf-slot"></span>d<span class="mf-slot"></span>'; }
+    else if (kind === 'sum') { node = document.createElement('span'); node.innerHTML = '∑<span class="mf-slot"></span>'; }
+    else if (kind === 'lim') { node = document.createElement('span'); node.innerHTML = 'lim<span class="mf-slot"></span>'; }
+    else if (kind === 'paren') { node = document.createElement('span'); node.innerHTML = '(<span class="mf-slot"></span>)'; }
+    else if (kind === 'matrix') { node = document.createElement('span'); node.innerHTML = '[<span class="mf-slot"></span>; <span class="mf-slot"></span>]'; }
+    if (!node) return;
+    if (r) { r.deleteContents(); r.insertNode(node); }
+    else field.appendChild(node);
+    // 光标放到第一个可编辑槽里
+    var slot = node.querySelector ? node.querySelector('.mf-slot') : null;
+    var target = slot || node;
+    var nr = document.createRange();
+    nr.setStart(target, 0); nr.collapse(true);
+    if (sel) { sel.removeAllRanges(); sel.addRange(nr); }
+  }
+
   function makeMathField() {
     var span = document.createElement('span');
     span.className = 'mathfield';
@@ -2216,8 +2326,9 @@
     if (ta.classList && ta.classList.contains('rich-answer')) {
       ta.focus();
       insertMathFieldAtCaret();
+      showFormulaDock();
       hideModal('modal-formula');
-      toast('已插入公式框，直接在框里输入公式', 'ok');
+      toast('已插入公式框，可直接输入或用底部符号栏', 'ok');
       return;
     }
     var display = /\\begin\{|\\\\/.test(src);
@@ -3380,6 +3491,35 @@
         if (t.parentNode) t.parentNode.removeChild(t);
         if (rich) rich.focus();
       }
+    });
+
+    // 公式框获得焦点 → 显示底部符号栏
+    document.addEventListener('focusin', function (e) {
+      var t = e.target;
+      if (t && t.classList && t.classList.contains('mathfield')) showFormulaDock();
+    });
+    document.addEventListener('mousedown', function (e) {
+      var t = e.target;
+      if (t && t.closest && t.closest('#formula-dock')) e.preventDefault();
+    });
+    document.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var keyBtn = t.closest('[data-dock-key]');
+      if (keyBtn) {
+        var field = activeMathField();
+        if (field) dockInsertText(field, keyBtn.getAttribute('data-dock-key'));
+        return;
+      }
+      var structBtn = t.closest('[data-dock-struct]');
+      if (structBtn) {
+        var field2 = activeMathField();
+        if (field2) dockInsertStruct(field2, structBtn.getAttribute('data-dock-struct'));
+        return;
+      }
+      if (t.closest('#formula-dock')) return;
+      if (t.closest('.mathfield')) return;
+      hideFormulaDock();
     });
 
     // 点富文本里的公式块 → 修改

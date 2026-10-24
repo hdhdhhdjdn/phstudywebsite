@@ -685,3 +685,16 @@ main { margin: 0 0 0 238px; max-width: 1180px; padding: 34px 42px 90px; }
 .mathfield .mfrac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; line-height: 1.1; text-align: center; }
 .mathfield .mfrac .fnum { border-bottom: 1px solid currentColor; padding: 0 3px; }
 .mathfield .mfrac .fden { padding: 0 3px; }
+/* 底部公式符号栏 */
+.formula-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; background: #fbfcfe; border-top: 2px solid #d7e3f5; box-shadow: 0 -6px 18px rgba(20,40,80,.10); max-height: 34vh; overflow-y: auto; }
+.formula-dock.hidden { display: none; }
+.fd-inner { display: flex; flex-wrap: wrap; gap: 14px; padding: 10px 16px; }
+.fd-group { display: flex; flex-direction: column; gap: 4px; }
+.fd-title { font-size: 12px; color: #6b7688; }
+.fd-keys { display: flex; flex-wrap: wrap; gap: 4px; }
+.fd-key { min-width: 34px; height: 32px; padding: 0 6px; border: 1px solid #cfd8e3; background: #fff; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.fd-key:hover { background: #eef5ff; border-color: #7aa7ff; }
+.fd-struct { background: #f7faff; }
+body.has-dock { padding-bottom: 180px; }
+.mathfield .mf-slot { display: inline-block; min-width: 12px; }
+.mathfield .mf-paren { color: #6b7688; }
