@@ -815,3 +815,9 @@ math-field.mathfield::part(menu-toggle) { display: none; }
 }
 .mathfield .mf-render { font-size: 20px; margin-bottom: 2px; }
 .mathfield .mf-render.mf-ph { display: none !important; }
+/* 公式框：编辑时同时显示 输入行 + 实时渲染行；失焦只显示渲染 */
+.mathfield .mf-render { display: block !important; }
+.mathfield .mf-input { display: none !important; }
+.mathfield.editing .mf-render { display: block !important; font-size: 18px; opacity: .95; margin-bottom: 4px; border-bottom: 1px dashed #cfd8e3; padding-bottom: 3px; }
+.mathfield.editing .mf-input { display: block !important; }
+.mathfield:not(.editing) .mf-render { margin-bottom: 0; border-bottom: none; }
