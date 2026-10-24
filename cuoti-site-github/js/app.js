@@ -659,7 +659,7 @@
     if (!t) return { stem: '', rest: '' };
     var lines = t.split('\n');
     if (lines.length < 2) return { stem: t, rest: '' };
-    var subRe = /^\s*(?:\(?[a-dA-D][\).、]?\s+|\d+[\).]\s*)\S/;
+    var subRe = /^\s*(?:\([a-dA-D]\)|[a-d][\).、]|[A-D]\s*\()/;
     for (var i = 1; i < lines.length; i++) {
       if (subRe.test(lines[i])) return { stem: lines.slice(0, i).join('\n'), rest: lines.slice(i).join('\n') };
     }
