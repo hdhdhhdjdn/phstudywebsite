@@ -1100,10 +1100,15 @@
 
   function leaveMathEditing(field) {
     if (!field) return;
+    commitMathField(field);
     field.classList.remove('editing');
     var input = field.querySelector('.mf-input');
     if (input) input.style.display = '';
     updateMathFieldRender(field);
+  }
+
+  function fieldCommitted(field) {
+    return (field && field.getAttribute('data-committed')) || '';
   }
 
   function updateMathFieldRender(field) {
@@ -1111,10 +1116,30 @@
     var input = field.querySelector('.mf-input');
     var render = field.querySelector('.mf-render');
     if (!input || !render) return;
-    var raw = input.value || '';
-    field.setAttribute('data-tex', raw);
-    if (!raw.trim()) { render.innerHTML = '<span class="mf-ph">在此处键入公式</span>'; return; }
-    try { render.innerHTML = safeMathHTML('$' + rawToLatex(raw) + '$'); } catch (e) { render.textContent = raw; }
+    var committed = fieldCommitted(field);
+    var tex = committed;
+    if (tex) {
+      try { render.innerHTML = safeMathHTML('$' + tex + '$'); } catch (e) { render.textContent = tex; }
+      render.classList.remove('mf-ph');
+    } else {
+      render.innerHTML = '<span class="mf-ph">在此处键入公式</span>';
+      render.classList.add('mf-ph');
+    }
+  }
+
+  // 空格：把当前输入提交成公式排版，输入框清空继续写
+  function commitMathField(field) {
+    if (!field) return false;
+    var input = field.querySelector('.mf-input');
+    if (!input) return false;
+    var raw = (input.value || '').trim();
+    if (!raw) return false;
+    var tex = rawToLatex(raw);
+    var prev = fieldCommitted(field);
+    field.setAttribute('data-committed', prev ? (prev + '\\;' + tex) : tex);
+    input.value = '';
+    updateMathFieldRender(field);
+    return true;
   }
 
   function restyleMathField(field) {
@@ -3788,6 +3813,11 @@
       var t = e.target;
       if (!t || !t.classList) return;
       if (t && t.tagName === 'MATH-FIELD') return;
+      if (t && t.classList && t.classList.contains('mf-input')) {
+        var fldS = t.closest('.mathfield');
+        if (fldS && commitMathField(fldS)) { e.preventDefault(); return; }
+        return;
+      }
       if (t.classList && t.classList.contains('mathfield')) {
         if (fieldConvertBeforeSpace(t)) e.preventDefault();
         return;

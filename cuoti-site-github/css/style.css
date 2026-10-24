@@ -805,3 +805,13 @@ math-field.mathfield::part(menu-toggle) { display: none; }
 .mathfield.editing .mf-render { display: none !important; }
 .mathfield.editing .mf-input { display: block !important; }
 .mathfield .mf-choices { display: flex !important; }
+/* 公式框：数学字体（KaTeX 自带字体）+ 空格提交后的排版行 */
+.mathfield .mf-input {
+  font-family: KaTeX_Math, KaTeX_Main, "Cambria Math", "Times New Roman", serif !important;
+  font-size: 20px !important;
+  font-style: normal !important;
+  color: #111827 !important;
+  line-height: 1.5;
+}
+.mathfield .mf-render { font-size: 20px; margin-bottom: 2px; }
+.mathfield .mf-render.mf-ph { display: none !important; }
