@@ -50,6 +50,36 @@ function splitByBytes(str, maxBytes) {
   return out;
 }
 
+const BLOB_DB_PATH = 'cuoti/db.json';
+let blobWriteChain = Promise.resolve();
+
+async function readDBFromBlob() {
+  try {
+    const { list } = require('@vercel/blob');
+    const res = await list({ prefix: BLOB_DB_PATH, limit: 1 });
+    const blob = res && res.blobs && res.blobs[0];
+    if (!blob || !blob.url) return null;
+    const r = await fetch(blob.url, { cache: 'no-store' });
+    if (!r.ok) return null;
+    const txt = await r.text();
+    if (!txt) return null;
+    return JSON.parse(txt);
+  } catch (e) {
+    console.error('[blob-db] read failed:', e && e.message);
+    return null;
+  }
+}
+
+async function writeDBToBlob(db) {
+  const { put } = require('@vercel/blob');
+  await put(BLOB_DB_PATH, JSON.stringify(db), {
+    access: 'public',
+    allowOverwrite: true,
+    addRandomSuffix: false,
+    contentType: 'application/json'
+  });
+}
+
 async function readDB() {
   if (useKV()) {
     const kv = require('@vercel/kv').kv;
@@ -69,6 +99,11 @@ async function readDB() {
     } catch (e) {
       console.error('[kv] read failed:', e && e.message);
     }
+    return emptyDB();
+  }
+  if (useBlob()) {
+    const fromBlob = await readDBFromBlob();
+    if (fromBlob) return fromBlob;
     return emptyDB();
   }
   if (!memoryDB) memoryDB = emptyDB();
@@ -96,6 +131,12 @@ async function writeDB(db) {
       updatedAt: new Date().toISOString()
     });
     return;
+  }
+  if (useBlob()) {
+    blobWriteChain = blobWriteChain
+      .then(function () { return writeDBToBlob(db); })
+      .catch(function (e) { console.error('[blob-db] write failed:', e && e.message); });
+    return blobWriteChain;
   }
   memoryDB = db;
 }
@@ -531,8 +572,8 @@ module.exports = async function handler(req, res) {
         app: 'cuoti-cloud',
         version: 1,
         serverless: true,
-        storage: useKV() ? 'kv' : 'memory',
         blob: useBlob() ? 'blob' : 'memory',
+      storage: useKV() ? 'kv' : (useBlob() ? 'blob-json' : 'memory'),
         registerCodeRequired: !!REGISTER_CODE,
         autoGrade: !!db.config.gradeKey
       });
