@@ -226,11 +226,32 @@
     s = s.replace(/\\\\/g, ' ');
     s = s.replace(/\\([{}%$&_#])/g, '$1');
     s = s.replace(/[ \t]+/g, ' ');
+    s = formatPlainMath(s);
     s = s.replace(/\n/g, '<br>');
     return s.trim();
   }
 
   // 把文本里的 $...$ / $$...$$ 数学段渲染成公式，其余按普通文本
+  // 化学式下标：H2O2 -> H₂O₂，KMnO4 -> KMnO₄（仅识别元素符号组合，避免误伤 G11 之类）
+  var CHEM_ELEMENTS = ('H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn ' +
+    'Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pt Au Hg Pb Bi ' +
+    'Ra Ac Th U W Re Os Ir Ta Hf').split(' ');
+  var CHEM_RE = new RegExp('(?:' + CHEM_ELEMENTS.map(function (e) { return e + '\\d*'; }).join('|') + ')+', 'g');
+  function formatChem(str) {
+    return String(str).replace(CHEM_RE, function (m) {
+      if (!/[0-9]/.test(m)) return m;              // 没数字不用下标
+      if (m.length < 2) return m;
+      return m.replace(/([A-Z][a-z]?)([0-9]+)/g, '$1<sub>$2</sub>');
+    });
+  }
+  // 单位指数：dm-3 -> dm⁻³，h-1 -> h⁻¹
+  function formatUnits(str) {
+    return String(str).replace(/(?<![A-Za-z0-9])([A-Za-z]{1,4})-([0-9]+)(?![0-9])/g, '$1<sup>-$2</sup>');
+  }
+  function formatPlainMath(str) {
+    return formatUnits(formatChem(String(str)));
+  }
+
   function renderMathText(text) {
     var text0 = String(text == null ? '' : text).replace(/\r\n/g, '\n');
     var hasKatex = !!(typeof window !== 'undefined' && window.katex && typeof window.katex.renderToString === 'function');
@@ -272,6 +293,7 @@
     if (s.indexOf('\n') < 0 && /\s[A-D]\s?\(/.test(s)) {
       s = s.replace(/\s+(?=[A-D]\s?\()/g, '\n');
     }
+    s = formatPlainMath(s);
     return s.replace(/\n/g, '<br>');
   }
 

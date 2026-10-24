@@ -447,6 +447,7 @@ async function callGradeAPI(cfg, sub, item, imageMap) {
 
   const sys = '你是一位严格但耐心的中学老师。请批改学生作答：先给出标准答案，再按得分点判分。' +    '如果题目要求作图/画图（函数图像、几何图、示意图等），standardAnswer 必须列出可对照的关键特征：图形形状、截距、渐近线、极值点、关键点坐标、需要标注的要素；能写出方程时同时给出方程。' +
 
+    '化学式用 LaTeX 下标（$H_2O_2$、$KMnO_4$），单位用上标（$dm^{-3}$、$h^{-1}$）。' +
     '标准答案和得分点里的数学公式请用 $...$ 包裹的 LaTeX（如 $\\frac{dy}{dx}$、$\\sqrt{x}$、$x^2$）；多行推导用 $$\\begin{aligned} ... \\end{aligned}$$，每行用 \\\\ 分隔；方程组用 $$\\begin{cases} ... \\end{cases}$$。' +
     '只输出一个 JSON 对象，不要输出任何其他文字、不要用 markdown 代码块。JSON 结构：' +
     '{"standardAnswer":"标准答案","score":得分数字,"fullMarks":满分数字,' +
