@@ -671,3 +671,9 @@ main { margin: 0 0 0 238px; max-width: 1180px; padding: 34px 42px 90px; }
 .mwf .mwfrac { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.1; }
 .mwf .mwline { width: 100%; height: 1px; background: #3a4a5f; margin: 1px 0; }
 .mwl .mtexpreview { margin-left: 4px; }
+/* 富文本答题框（框内直接显示公式） */
+.rich-answer { min-height: 64px; padding: 10px 12px; border: 1px solid #d7dee8; border-radius: 8px; background: #fff; font-size: 15px; line-height: 1.8; outline: none; white-space: pre-wrap; }
+.rich-answer:focus { border-color: #7aa7ff; box-shadow: 0 0 0 3px rgba(90,140,255,.15); }
+.rich-answer:empty:before { content: attr(data-ph); color: #9aa4b2; }
+.rich-answer .mathchip { display: inline-block; background: #eef5ff; border: 1px solid #cfe1ff; border-radius: 5px; padding: 0 4px; margin: 0 2px; cursor: pointer; }
+.rich-answer .mathchip:focus, .rich-answer .mathchip:hover { border-color: #7aa7ff; }

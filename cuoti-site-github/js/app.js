@@ -782,6 +782,90 @@
     return esc(token);
   }
 
+  // ---------- 富文本答题框（框内直接显示公式） ----------
+  function makeMathChip(tex) {
+    var span = document.createElement('span');
+    span.className = 'mathchip';
+    span.setAttribute('contenteditable', 'false');
+    span.setAttribute('data-tex', tex);
+    var html = '';
+    try { html = renderMathText('$' + tex + '$'); } catch (e) { html = esc(tex); }
+    span.innerHTML = html || ('$' + esc(tex) + '$');
+    return span;
+  }
+
+  function serializeRich(el) {
+    var out = '';
+    Array.prototype.slice.call(el.childNodes).forEach(function (node) {
+      if (node.nodeType === 3) { out += node.nodeValue; return; }
+      if (node.nodeType !== 1) return;
+      if (node.classList && node.classList.contains('mathchip')) {
+        out += '$' + (node.getAttribute('data-tex') || '') + '$';
+      } else if (node.tagName === 'BR') {
+        out += '\n';
+      } else if (node.tagName === 'DIV' || node.tagName === 'P') {
+        out += '\n' + serializeRich(node);
+      } else {
+        out += node.textContent;
+      }
+    });
+    return out.replace(/\u00a0/g, ' ');
+  }
+
+  function readAnswerValue(el) {
+    if (!el) return '';
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') return String(el.value || '');
+    return serializeRich(el);
+  }
+
+  function insertChipAtCaret(el, tex) {
+    el.focus();
+    var chip = makeMathChip(tex);
+    var space = document.createTextNode(' ');
+    var sel = window.getSelection();
+    var range = null;
+    if (sel && sel.rangeCount && el.contains(sel.getRangeAt(0).startContainer)) range = sel.getRangeAt(0);
+    if (range) {
+      range.deleteContents();
+      range.insertNode(chip);
+      chip.parentNode.insertBefore(space, chip.nextSibling);
+      var nr = document.createRange();
+      nr.setStart(space, 1); nr.collapse(true);
+      sel.removeAllRanges(); sel.addRange(nr);
+    } else {
+      el.appendChild(chip);
+      el.appendChild(space);
+    }
+  }
+
+  function richConvertBeforeSpace(el) {
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return false;
+    var range = sel.getRangeAt(0);
+    var node = range.startContainer;
+    if (node.nodeType !== 3) return false;
+    var off = range.startOffset;
+    var text = node.nodeValue.slice(0, off);
+    var m = text.match(/([A-Za-z0-9)\]]+(?:\^\{?[A-Za-z0-9+\-]+\}?|_\{?[A-Za-z0-9]+\}?|\/[A-Za-z0-9)\]]+))$/);
+    if (!m) return false;
+    var latex = quickLatexFrom(m[0]);
+    if (!latex) return false;
+    var tex = latex.replace(/^\$/, '').replace(/\$$/, '');
+    var start = off - m[0].length;
+    var r = document.createRange();
+    r.setStart(node, start);
+    r.setEnd(node, off);
+    r.deleteContents();
+    var chip = makeMathChip(tex);
+    r.insertNode(chip);
+    var space = document.createTextNode(' ');
+    chip.parentNode.insertBefore(space, chip.nextSibling);
+    var nr = document.createRange();
+    nr.setStart(space, 1); nr.collapse(true);
+    sel.removeAllRanges(); sel.addRange(nr);
+    return true;
+  }
+
   function mathPreviewHTML(raw) {
     var txt = String(raw || '');
     var out = '';
@@ -888,6 +972,13 @@
     var input = $('#mtoken-input');
     if (!ctx || !input) return;
     var next = input.value;
+    if (ctx.chip) {
+      ctx.chip.setAttribute('data-tex', next);
+      try { ctx.chip.innerHTML = renderMathText('$' + next + '$'); } catch (e) { ctx.chip.textContent = next; }
+      closeModal('modal-math-token');
+      toast('公式已更新', 'ok');
+      return;
+    }
     var ta = ctx.ta;
     if (ta) {
       var val = String(ta.value || '');
@@ -1054,8 +1145,7 @@
         __parts.map(function (p) {
           return '<div class="q-part">' +
             '<div class="q-text q-text-sub">(' + esc(p.label) + ') ' + renderMathText(p.body) + '</div>' +
-            '<textarea class="inline-answer-text" rows="2" data-part="' + esc(p.label) + '" placeholder="第 (' + esc(p.label) + ') 小题的答案 / 过程"></textarea>' +
-            '<div class="answer-preview"></div>' +
+            '<div class="rich-answer inline-answer-text" contenteditable="true" data-part="' + esc(p.label) + '" data-ph="第 (' + esc(p.label) + ') 小题的答案 / 过程"></div>' +
             partActionsHTML(it, p.label) +
             partResultHTML(it, p.label) +
           '</div>';
@@ -2008,7 +2098,7 @@
     var ta = null;
     if (state.fqPart) {
       var __card = document.querySelector('article.item-card[data-id="' + state.formulaTarget + '"]');
-      ta = __card ? __card.querySelector('textarea[data-part="' + state.fqPart + '"]') : null;
+      ta = __card ? __card.querySelector('[data-part="' + state.fqPart + '"]') : null;
     }
     if (!ta) ta = state.fqTargetEl && document.body.contains(state.fqTargetEl) ? state.fqTargetEl : null;
     if (!ta) {
@@ -2016,6 +2106,12 @@
       ta = card ? card.querySelector('.inline-answer-text') : null;
     }
     if (!ta) { toast('找不到作答框，请重新点「✍️ 作答」', 'err'); return; }
+    if (ta.classList && ta.classList.contains('rich-answer')) {
+      insertChipAtCaret(ta, src);
+      hideModal('modal-formula');
+      toast('公式已插入作答框', 'ok');
+      return;
+    }
     var display = /\\begin\{|\\\\/.test(src);
     var snippet = display ? ('$$\n' + src + '\n$$') : ('$' + src + '$');
     insertAtCursor(ta, snippet);
@@ -2156,8 +2252,8 @@
     for (var i = 0; i < parts.length; i++) if (parts[i].label === label) part = parts[i];
     var body = part ? part.body : '';
     var card = document.querySelector('article.item-card[data-id="' + itemId + '"]');
-    var ta = card ? card.querySelector('textarea[data-part="' + label + '"]') : null;
-    var answerText = withAnswer && ta ? ta.value.trim() : '';
+    var ta = card ? card.querySelector('[data-part="' + label + '"]') : null;
+    var answerText = withAnswer && ta ? readAnswerValue(ta).trim() : '';
     if (withAnswer && !answerText) { toast('先在 (' + label + ') 框里写下答案再批改', 'err'); return; }
     toast('AI 正在处理 (' + label + ') 小题…', 'ok');
     var ansImgs = (it.partAnswerImageIds || {})[label] || [];
@@ -2377,11 +2473,11 @@
     var text = '';
     if (partTAs.length) {
       text = partTAs.map(function (t) {
-        var v = (t.value || '').trim();
+        var v = readAnswerValue(t).trim();
         return v ? ('(' + t.getAttribute('data-part') + ') ' + v) : '';
       }).filter(Boolean).join('\n');
     } else {
-      text = tas[0] ? tas[0].value.trim() : '';
+      text = tas[0] ? readAnswerValue(tas[0]).trim() : '';
     }
     var imgs = (state.answerImages[itemId] || []).slice();
     if (!text && !imgs.length) { toast('写点答案，或者上传手写/绘图再提交', 'err'); return; }
@@ -3132,7 +3228,8 @@
     document.addEventListener('input', function (e) {
       var t = e.target;
       if (!t) return;
-      if (t.classList && t.classList.contains('inline-answer-text')) refreshAnswerPreview(t);
+      if (t.classList && t.classList.contains('rich-answer')) { /* 富文本框内部处理 */ }
+      if (t.tagName === 'TEXTAREA' && t.classList && t.classList.contains('inline-answer-text')) refreshAnswerPreview(t);
       if (t.classList && t.classList.contains('mwi')) {
         var box = t.closest('.answer-preview');
         var ta2 = box && box.parentNode ? box.parentNode.querySelector('textarea') : null;
@@ -3148,11 +3245,30 @@
     document.addEventListener('keydown', function (e) {
       if (e.key !== ' ' || e.isComposing) return;
       var t = e.target;
-      if (!t || !t.classList || !t.classList.contains('inline-answer-text')) return;
+      if (!t || !t.classList) return;
+      if (t.classList.contains('rich-answer')) {
+        if (richConvertBeforeSpace(t)) e.preventDefault();
+        return;
+      }
+      if (!t.classList.contains('inline-answer-text')) return;
       if (convertBeforeSpace(t)) {
         e.preventDefault();
         refreshAnswerPreview(t);
       }
+    });
+
+    // 点富文本里的公式块 → 修改
+    document.addEventListener('click', function (e) {
+      var chip = e.target && e.target.closest ? e.target.closest('.mathchip') : null;
+      if (!chip) return;
+      var tex = chip.getAttribute('data-tex') || '';
+      state.mtokenCtx = { chip: chip, raw: tex };
+      var input = $('#mtoken-input');
+      if (input) input.value = tex;
+      var prev = $('#mtoken-preview');
+      if (prev) { try { prev.innerHTML = renderMathText('$' + tex + '$'); } catch (err) {} }
+      showModal('modal-math-token');
+      if (input) setTimeout(function () { input.focus(); input.select(); }, 60);
     });
 
     // 公式格子失焦后重新渲染（保持格式一致）
