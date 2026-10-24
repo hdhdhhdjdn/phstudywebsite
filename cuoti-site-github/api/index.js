@@ -111,20 +111,48 @@ function hashToMap(hash) {
   const map = {};
   if (!hash) return map;
   if (Array.isArray(hash)) {
-    for (let i = 0; i + 1 < hash.length; i += 2) map[String(hash[i])] = hash[i + 1];
-  } else {
-    Object.keys(hash).forEach(function (k) { map[k] = hash[k]; });
+    // 形式1：扁平数组 [f1, v1, f2, v2]
+    if (hash.length && !Array.isArray(hash[0])) {
+      for (let i = 0; i + 1 < hash.length; i += 2) map[String(hash[i])] = hash[i + 1];
+    } else {
+      // 形式2：[[f1, v1], [f2, v2]]
+      hash.forEach(function (pair) {
+        if (pair && pair.length >= 2) map[String(pair[0])] = pair[1];
+      });
+    }
+    return map;
   }
+  if (hash instanceof Map) {
+    hash.forEach(function (v, k) { map[String(k)] = v; });
+    return map;
+  }
+  Object.keys(hash).forEach(function (k) { map[k] = hash[k]; });
   return map;
+}
+
+function toRecord(raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'object') return raw;       // @vercel/kv 可能已反序列化
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch (e) { return null; }
+  }
+  return null;
 }
 
 function mapToRecords(map) {
   const out = [];
   Object.keys(map || {}).forEach(function (k) {
-    try {
-      const v = JSON.parse(map[k]);
-      if (v && typeof v === 'object') out.push(v);
-    } catch (e) {}
+    const v = toRecord(map[k]);
+    if (v && typeof v === 'object') out.push(v);
+  });
+  return out;
+}
+
+function mapToStringValues(map) {
+  const out = {};
+  Object.keys(map || {}).forEach(function (k) {
+    const v = map[k];
+    out[k] = (typeof v === 'string') ? v : JSON.stringify(v);
   });
   return out;
 }
@@ -142,27 +170,23 @@ async function readDBRedis() {
 
   for (let i = 0; i < names.length; i++) {
     const name = names[i];
-    const map = hashToMap(res[i]);
+    const map = mapToStringValues(hashToMap(res[i])); // 统一成字符串快照，方便 diff
     db[name] = mapToRecords(map);
     snap.colls[name] = map;
   }
 
-  const sessMap = hashToMap(res[names.length]);
+  const sessMap = mapToStringValues(hashToMap(res[names.length]));
   db.sessions = {};
   Object.keys(sessMap).forEach(function (token) {
-    try { db.sessions[token] = JSON.parse(sessMap[token]); } catch (e) {}
+    const v = toRecord(sessMap[token]);
+    if (v) db.sessions[token] = v;
   });
   snap.sessions = sessMap;
 
   const cfg = res[names.length + 1];
-  if (cfg) {
-    let parsed = cfg;
-    if (typeof cfg === 'string') { try { parsed = JSON.parse(cfg); } catch (e) { parsed = null; } }
-    if (parsed && typeof parsed === 'object') db.config = Object.assign(db.config, parsed);
-    snap.config = JSON.stringify(parsed || {});
-  } else {
-    snap.config = null;
-  }
+  const cfgObj = toRecord(cfg);
+  if (cfgObj && typeof cfgObj === 'object') db.config = Object.assign(db.config, cfgObj);
+  snap.config = cfgObj ? JSON.stringify(cfgObj) : null;
 
   db.__snap = snap;
   return db;
