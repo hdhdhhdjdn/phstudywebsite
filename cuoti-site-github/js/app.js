@@ -332,7 +332,7 @@
       var url = URL.createObjectURL(file);
       var img = new Image();
       img.onload = function () {
-        var max = 1500;
+        var max = 1800;
         var w = img.naturalWidth || 1200;
         var h = img.naturalHeight || 900;
         var scale = Math.min(1, max / Math.max(w, h));
@@ -843,6 +843,9 @@
         (canEdit ? '<button class="link danger" data-action="delete-item" data-id="' + esc(it.id) + '">删除</button>' : '') +
       '</div>' +
       questionHTML +
+      ((it.imageIds || []).length && (it.question || '').replace(/\s/g, '').length < 40
+        ? '<div class="q-warn">⚠️ 文字可能没识别完整：点「🔤 转文字」重试，或点「编辑」手动补充</div>'
+        : '') +
       ((topicChips || causeChips || msChip || answeredChip) ? '<div class="chips">' + topicChips + causeChips + msChip + answeredChip + '</div>' : '') +
       answerHTML +
       gradeHTML +

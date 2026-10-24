@@ -402,7 +402,7 @@ async function callTranscribeAPI(cfg, item, imageMap) {
       '1. 保留题号、选项、单位、数字，不要遗漏\n' +
       '2. 所有数学公式用 $...$ 包裹的 LaTeX（如 $\\frac{1}{2}$、$x^2$、$\\sqrt{3}$、$H_2O$），普通文字不要放进 $...$\n' +
       '3. 不要添加答案、解析或解释\n' +
-      '3.1 【必须完整】逐段识别，题号下方的整段描述文字一个都不能少；不要只识别小问（a/b/c），也不要漏掉说明、条件、图表标题、单位\n' +
+      '3.1 【必须完整】从页面最顶部开始逐行识别，按原顺序输出，任何一行都不能跳过；特别注意题号（如 1.）后面的整段描述文字（例如 A uniform solid disk of mass m…），不要只识别小问 a/b/c，也不要漏掉说明、条件、图表标题（Figure 1）、单位\n' +
       '3.2 如果某段文字看不清，尽量根据上下文补全并保留原意，不要整段跳过\n' +
       '4. 保留原题的换行和版式：每个选项单独一行，题干分行的保持分行\n' +
       '5. 方程组请写成 LaTeX 的 cases 多行环境（每行一个方程，行与行之间用两个反斜杠分隔）\n' +
@@ -431,7 +431,7 @@ async function callTranscribeAPI(cfg, item, imageMap) {
         { role: 'user', content: content }
       ],
       temperature: 0.1,
-      max_tokens: 2000
+      max_tokens: 3000
     })
   });
   if (!resp.ok) {
