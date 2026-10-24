@@ -703,7 +703,10 @@
     var out = [];
     var cur = null;
     sp.rest.split('\n').forEach(function (ln) {
-      var m = ln.match(/^\s*\(?([a-h])[\).、]?\s+(.*)$/);
+      // 支持 (a) / (d)(i) / a) / a. 等写法（(d)(i) 中间没有空格也要能拆）
+      var m = ln.match(/^\s*\(([a-h])\)\s*(.*)$/) ||
+              ln.match(/^\s*([a-h])[\).、]\s*(.*)$/) ||
+              ln.match(/^\s*([a-h])\s+(.*)$/);
       if (m) {
         cur = { label: m[1], body: m[2] };
         out.push(cur);
