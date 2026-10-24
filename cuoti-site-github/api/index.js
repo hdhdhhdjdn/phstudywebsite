@@ -180,7 +180,8 @@ async function saveImage(id, buffer, contentType) {
     const blob = await put('cuoti/' + id + '.jpg', buffer, {
       access: 'public',
       contentType: contentType || 'image/jpeg',
-      addRandomSuffix: false
+      addRandomSuffix: false,
+      allowOverwrite: true
     });
     return blob.url;
   }
