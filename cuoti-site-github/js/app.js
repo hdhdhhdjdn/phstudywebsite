@@ -989,7 +989,7 @@
     } catch (e) { return false; }
   }
 
-  function dockInsertText(field, txt) {  function dockInsertText(field, txt) {
+  function dockInsertText(field, txt) {
     if (field && field.querySelector) {
       var ta = field.querySelector('.mf-input');
       if (ta) {
