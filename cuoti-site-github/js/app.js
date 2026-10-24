@@ -659,7 +659,7 @@
     if (!t) return { stem: '', rest: '' };
     var lines = t.split('\n');
     if (lines.length < 2) return { stem: t, rest: '' };
-    var subRe = /^\s*(?:\([a-zA-Z]\)|[a-z][\).、]|[A-D]\s*\()/;
+    var subRe = /^\s*(?:\((?![ivxIVX]\))[a-hA-H]\)|[a-h][\).、]|[A-D]\s*\()/;
     for (var i = 1; i < lines.length; i++) {
       if (subRe.test(lines[i])) return { stem: lines.slice(0, i).join('\n'), rest: lines.slice(i).join('\n') };
     }
@@ -673,7 +673,7 @@
     var out = [];
     var cur = null;
     sp.rest.split('\n').forEach(function (ln) {
-      var m = ln.match(/^\s*\(?([a-z])[\).、]?\s+(.*)$/);
+      var m = ln.match(/^\s*\(?([a-h])[\).、]?\s+(.*)$/);
       if (m) {
         cur = { label: m[1], body: m[2] };
         out.push(cur);
