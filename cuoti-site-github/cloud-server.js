@@ -307,6 +307,7 @@ async function callGradeAPI(cfg, sub, item) {
         { role: 'user', content: content }
       ],
       temperature: 0.2,
+      response_format: { type: 'json_object' },
       max_tokens: 2500
     })
   });
@@ -342,6 +343,48 @@ async function callGradeAPI(cfg, sub, item) {
 
 // ---------------- 图片转文字（OCR） ----------------
 // ---------------- AI 定位图形区域 ----------------
+// ---------------- AI 识别 IB 知识点 ----------------
+async function callTagAPI(cfg, item) {
+  const parts = [];
+  parts.push('这是一道 IB DP 学生的错题，请判断它属于哪门学科、哪个 IB DP 知识点。');
+  if (item.question) parts.push('【题目文字】\n' + item.question);
+  parts.push('学科只能从以下选择：数学 AA、数学 AI、物理、化学、生物、经济、商业管理、历史、地理、哲学、中文 A、英语 A、英语 B、TOK。');
+  parts.push('知识点命名：物理用 A. Space, time and motion / B. The particulate nature of matter / C. Wave behaviour / D. Fields / E. Nuclear and quantum physics（可到二级，如 D.2 Gravitational fields）；化学用 Structure 1-3 / Reactivity 1-2 主题；数学用 Number and algebra / Functions / Geometry and trigonometry / Statistics and probability / Calculus；其他用 IB 大纲 topic。最多 3 个。只输出 JSON：{"subject":"学科","topics":["知识点1"],"confidence":"high 或 medium 或 low"}');
+  const imageIds = (item && item.imageIds) || [];
+  const content = [{ type: 'text', text: parts.join('\n\n') }];
+  for (let i = 0; i < Math.min(imageIds.length, 2); i++) {
+    const fp = path.join(UPLOAD_DIR, String(imageIds[i]) + '.jpg');
+    if (fs.existsSync(fp)) content.push({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + fs.readFileSync(fp).toString('base64') } });
+  }
+  const url = cfg.gradeBase.replace(/\/+$/, '') + '/chat/completions';
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.gradeKey },
+    body: JSON.stringify({
+      model: cfg.gradeModel,
+      reasoning_effort: /^glm-5/i.test(String(cfg.gradeModel || '')) ? 'low' : undefined,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: '你是熟悉 IB DP 课程大纲的老师，只输出 JSON。' },
+        { role: 'user', content: content }
+      ],
+      temperature: 0.1,
+      max_tokens: 1500
+    })
+  });
+  if (!resp.ok) { const t = await resp.text(); throw new Error('接口返回 ' + resp.status + '：' + String(t).slice(0, 200)); }
+  const data = await resp.json();
+  const raw = extractMessageText(data);
+  if (!raw) throw modelEmptyError(data);
+  const parsed = extractJSON(raw);
+  if (!parsed) throw new Error('模型返回的不是合法 JSON');
+  return {
+    subject: String(parsed.subject || '').trim(),
+    topics: Array.isArray(parsed.topics) ? parsed.topics.map(function (t) { return String(t).trim(); }).filter(Boolean).slice(0, 3) : [],
+    confidence: String(parsed.confidence || '')
+  };
+}
+
 async function callFigureAPI(cfg, item, forceImageId) {
   const imageIds = (item && item.imageIds) || [];
   if (!imageIds.length) throw new Error('这道题没有图片');
@@ -365,6 +408,7 @@ async function callFigureAPI(cfg, item, forceImageId) {
         ] }
       ],
       temperature: 0.1,
+      response_format: { type: 'json_object' },
       max_tokens: 800
     })
   });
@@ -414,6 +458,7 @@ async function callSolvePartAPI(cfg, item, partLabel, partText, answerText, answ
         { role: 'user', content: content }
       ],
       temperature: 0.2,
+      response_format: { type: 'json_object' },
       max_tokens: 2000
     })
   });
@@ -463,7 +508,8 @@ async function callTranscribeAPI(cfg, item) {
           { role: 'user', content: content }
         ],
         temperature: 0.1,
-        max_tokens: 4000
+        response_format: { type: 'json_object' },
+      max_tokens: 4000
       })
     });
     if (!resp.ok) {

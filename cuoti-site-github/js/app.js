@@ -690,7 +690,6 @@
   function partActionsHTML(it, label) {
     return '<div class="part-actions">' +
       '<label class="btn tiny">📷 手写/绘图<input type="file" class="part-file" accept="image/*" multiple data-id="' + esc(it.id) + '" data-part="' + esc(label) + '" hidden></label>' +
-      '<label class="btn tiny">📷 手写/绘图<input type="file" class="part-file" accept="image/*" multiple data-id="' + esc(it.id) + '" data-part="' + esc(label) + '" hidden></label>' +
       '<button class="btn tiny" data-action="part-formula" data-id="' + esc(it.id) + '" data-part="' + esc(label) + '">∑ 公式</button>' +
       '<button class="btn tiny" data-action="part-solve" data-id="' + esc(it.id) + '" data-part="' + esc(label) + '">🤖 批改</button>' +
       '<button class="btn tiny" data-action="part-answer" data-id="' + esc(it.id) + '" data-part="' + esc(label) + '">👀 答案</button>' +
