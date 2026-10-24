@@ -743,3 +743,9 @@ math-field.mathfield::part(menu-toggle) { display: none; }
 /* 公式框包裹层（避免外层 contenteditable 吞键盘） */
 .mf-wrap { display: inline-block; vertical-align: middle; margin: 0 3px; }
 .mf-wrap math-field { display: inline-block; }
+/* 公式框：上渲染、下输入（始终可输入） */
+.mathfield { display: inline-block; min-width: 200px; max-width: 100%; padding: 4px 8px; background: #f3f5f8; border: 1px solid #cfd8e3; border-radius: 6px; vertical-align: middle; margin: 0 3px; }
+.mathfield:focus-within { background: #fff; border-color: #7aa7ff; box-shadow: 0 0 0 2px rgba(90,140,255,.18); }
+.mathfield .mf-render { display: block; min-height: 22px; font-size: 18px; color: #1f2733; font-family: KaTeX_Main, "Cambria Math", serif; }
+.mathfield .mf-input { display: block; width: 100%; min-width: 180px; margin-top: 3px; padding: 2px 4px; border: none; border-top: 1px dashed #cfd8e3; background: transparent; outline: none; resize: none; font-size: 13px; color: #4b5567; font-family: "Consolas", "Courier New", monospace; }
+.mathfield .mf-input::placeholder { color: #9aa4b2; }

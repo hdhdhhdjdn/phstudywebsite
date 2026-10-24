@@ -851,6 +851,19 @@
   }
 
   function dockInsertText(field, txt) {
+    if (field && field.querySelector) {
+      var ta = field.querySelector('.mf-input');
+      if (ta) {
+        ta.focus();
+        var v = ta.value || '';
+        var pos = (typeof ta.selectionStart === 'number') ? ta.selectionStart : v.length;
+        ta.value = v.slice(0, pos) + txt + v.slice(typeof ta.selectionEnd === 'number' ? ta.selectionEnd : v.length);
+        var np = pos + txt.length;
+        try { ta.selectionStart = ta.selectionEnd = np; } catch (e) {}
+        updateMathFieldRender(field);
+        return;
+      }
+    }
     if (field && field.tagName === 'MATH-FIELD') {
       try { field.focus(); field.insert(txt); return; } catch (e) {}
     }
@@ -870,6 +883,14 @@
   }
 
   function dockInsertStruct(field, kind) {
+    if (field && field.querySelector) {
+      var ta2 = field.querySelector('.mf-input');
+      if (ta2) {
+        var ins = { frac: '/', sup: '^', sub: '_', sqrt: '\\sqrt{}', int: '\\int ', sum: '\\sum ', lim: '\\lim ', paren: '()', matrix: '[]' }[kind] || '/';
+        dockInsertText(field, ins);
+        return;
+      }
+    }
     if (field && field.tagName === 'MATH-FIELD') {
       var cmds = { frac: 'insertFraction', sup: 'addSuperscript', sub: 'addSubscript', sqrt: 'insertSquareRoot', int: 'insertIntegral', sum: 'insertSum', lim: 'insertLimit', paren: 'insertLeftRight', matrix: 'insertMatrix' };
       var cmd = cmds[kind] || 'insertFraction';
@@ -939,25 +960,19 @@
   }
 
   function makeMathField() {
-    initMathLive();
-    var ok = false;
-    try { ok = !!(window.customElements && window.customElements.get('math-field')); } catch (e) { ok = false; }
-    if (!ok) {
-      ensureMathLiveLoaded();
-      // 兜底：普通可编辑框，保证随时能输入（不提示任何错误）
-      var span = document.createElement('span');
-      span.className = 'mathfield mathfield-fallback';
-      span.setAttribute('contenteditable', 'true');
-      span.setAttribute('data-ph', '在此处键入公式。');
-      span.setAttribute('spellcheck', 'false');
-      return span;
-    }
-    var mf = document.createElement('math-field');
-    mf.className = 'mathfield';
-    mf.setAttribute('virtual-keyboard-mode', 'manual');
-    mf.setAttribute('smart-fence', '');
-    mf.setAttribute('letter-shape-style', 'italic');
-    return mf;
+    var span = document.createElement('span');
+    span.className = 'mathfield';
+    var render = document.createElement('span');
+    render.className = 'mf-render';
+    render.textContent = '';
+    var input = document.createElement('textarea');
+    input.className = 'mf-input';
+    input.rows = 1;
+    input.setAttribute('placeholder', '在此处键入公式，例如 a+b^2、x_2、a/b');
+    input.setAttribute('spellcheck', 'false');
+    span.appendChild(render);
+    span.appendChild(input);
+    return span;
   }
 
   // 把原始写法转成 LaTeX
@@ -972,9 +987,14 @@
 
   function updateMathFieldRender(field) {
     if (!field) return;
-    var raw = field.textContent || '';
+    var input = field.querySelector('.mf-input');
+    var render = field.querySelector('.mf-render');
+    if (!input || !render) return;
+    var raw = input.value || '';
     field.setAttribute('data-tex', raw);
-    if (raw.trim()) restyleMathField(field);
+    if (!raw.trim()) { render.innerHTML = ''; return; }
+    try { render.innerHTML = renderMathText('$' + rawToLatex(raw) + '$'); } catch (e) { render.textContent = raw; }
+    input.rows = Math.max(1, Math.min(3, Math.ceil(raw.length / 40)));
   }
 
   function restyleMathField(field) {
@@ -1067,7 +1087,7 @@
     } else {
       box.appendChild(wrap);
     }
-    var srcEl = field;
+    var srcEl = field.querySelector ? (field.querySelector('.mf-input') || field) : field;
     var nr = document.createRange();
     nr.setStart(srcEl || field, 0); nr.collapse(true);
     if (sel) { sel.removeAllRanges(); sel.addRange(nr); }
@@ -1101,7 +1121,7 @@
     } else {
       rich.appendChild(field);
     }
-    var srcEl2 = field;
+    var srcEl2 = field.querySelector ? (field.querySelector('.mf-input') || field) : field;
     var nr = document.createRange();
     nr.setStart(srcEl2 || field, 0); nr.collapse(true);
     if (sel) { sel.removeAllRanges(); sel.addRange(nr); }
@@ -3624,9 +3644,9 @@
       if (!t) return;
       if (t.classList && t.classList.contains('rich-answer')) { /* 富文本框内部处理 */ }
       if (t.tagName === 'TEXTAREA' && t.classList && t.classList.contains('inline-answer-text')) refreshAnswerPreview(t);
-      if (t && t.tagName === 'MATH-FIELD') return;
-      if (t.classList && t.classList.contains('mathfield')) {
-        updateMathFieldRender(t);
+      if (t && t.classList && t.classList.contains('mf-input')) {
+        var fld0 = t.closest('.mathfield');
+        if (fld0) updateMathFieldRender(fld0);
         return;
       }
       if (t.classList && t.classList.contains('mwi')) {
@@ -3666,6 +3686,16 @@
       if (e.key !== 'Backspace') return;
       var t = e.target;
       if (!t) return;
+      if (t.classList && t.classList.contains('mf-input')) {
+        if (!(t.value || '').trim()) {
+          var fldB = t.closest('.mathfield');
+          var richB = t.closest('.rich-answer');
+          e.preventDefault();
+          if (fldB && fldB.parentNode) fldB.parentNode.removeChild(fldB);
+          if (richB) richB.focus();
+        }
+        return;
+      }
       if (t.tagName === 'MATH-FIELD') {
         var mfv = '';
         try { mfv = t.value || ''; } catch (e) {}
