@@ -898,18 +898,10 @@
   function makeMathField() {
     var span = document.createElement('span');
     span.className = 'mathfield';
+    span.setAttribute('contenteditable', 'true');
     span.setAttribute('data-tex', '');
-    var render = document.createElement('span');
-    render.className = 'mf-render';
-    render.setAttribute('contenteditable', 'false');
-    render.textContent = '在此处键入公式。';
-    var src = document.createElement('span');
-    src.className = 'mf-src';
-    src.setAttribute('contenteditable', 'true');
-    src.setAttribute('spellcheck', 'false');
-    src.setAttribute('data-ph', '在此处键入公式。');
-    span.appendChild(render);
-    span.appendChild(src);
+    span.setAttribute('data-ph', '在此处键入公式。');
+    span.setAttribute('spellcheck', 'false');
     return span;
   }
 
@@ -924,59 +916,62 @@
   }
 
   function updateMathFieldRender(field) {
-    var src = field.querySelector('.mf-src');
-    var render = field.querySelector('.mf-render');
-    if (!src || !render) return;
-    var raw = src.textContent || '';
-    var tex = rawToLatex(raw);
+    if (!field) return;
+    var raw = field.textContent || '';
     field.setAttribute('data-tex', raw);
-    if (!raw.trim()) {
-      render.textContent = '在此处键入公式。';
-      render.className = 'mf-render mf-empty';
-      return;
-    }
-    render.className = 'mf-render';
-    var html = '';
-    try { html = renderMathText('$' + tex + '$'); } catch (e) { html = ''; }
-    render.innerHTML = html || esc(raw);
+    if (raw.trim()) restyleMathField(field);
   }
 
-  // 把公式框里的字母排成斜体、数字正体（看起来就是公式）
   function restyleMathField(field) {
     if (!field) return;
-    var frag = document.createDocumentFragment();
-    Array.prototype.slice.call(field.childNodes).forEach(function (node) {
-      if (node.nodeType === 3) {
-        var txt = node.nodeValue;
-        var re = /([A-Za-z]+|[0-9]+(?:\.[0-9]+)?)/g;
-        var last = 0, m;
-        while ((m = re.exec(txt)) !== null) {
-          if (m.index > last) frag.appendChild(document.createTextNode(txt.slice(last, m.index)));
-          var span = document.createElement('span');
-          if (/^[A-Za-z]+$/.test(m[0])) { span.className = 'mv'; span.textContent = m[0]; }
-          else { span.className = 'mn'; span.textContent = m[0]; }
-          frag.appendChild(span);
-          last = m.index + m[0].length;
-        }
-        if (last < txt.length) frag.appendChild(document.createTextNode(txt.slice(last)));
-        return;
+    var sel = window.getSelection();
+    var off = 0;
+    if (sel && sel.rangeCount && field.contains(sel.getRangeAt(0).startContainer)) {
+      var r0 = sel.getRangeAt(0).cloneRange();
+      r0.selectNodeContents(field);
+      r0.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset);
+      off = r0.toString().length;
+    }
+    var raw = field.textContent || '';
+    if (!raw) return;
+    // 拆成片段：x^2 / x_2 / a/b / 普通文本
+    var html = '';
+    var re = /([A-Za-z0-9)\]]+)\^\{?([^{}\s]+)\}?|([A-Za-z0-9)\]]+)_\{?([^{}\s]+)\}?|([A-Za-z0-9)\]]+)\/([A-Za-z0-9)\]]+)/g;
+    var last = 0, m;
+    function plain(txt) {
+      return String(txt).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; })
+        .replace(/([A-Za-z]+)/g, '<i class="mv">$1</i>');
+    }
+    while ((m = re.exec(raw)) !== null) {
+      if (m.index > last) html += plain(raw.slice(last, m.index));
+      if (m[1] != null) html += plain(m[1]) + '<sup>' + plain(m[2]) + '</sup>';
+      else if (m[3] != null) html += plain(m[3]) + '<sub>' + plain(m[4]) + '</sub>';
+      else if (m[5] != null) html += '<span class="mfrac"><span class="fnum">' + plain(m[5]) + '</span><span class="fden">' + plain(m[6]) + '</span></span>';
+      last = m.index + m[0].length;
+    }
+    if (last < raw.length) html += plain(raw.slice(last));
+    field.innerHTML = html;
+    // 恢复光标
+    try {
+      var walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT, null);
+      var count = 0, node, target = null, toff = 0;
+      while ((node = walker.nextNode())) {
+        var len = node.nodeValue.length;
+        if (count + len >= off) { target = node; toff = off - count; break; }
+        count += len;
       }
-      if (node.nodeType !== 1) return;
-      if (node.tagName === 'SUP' || node.tagName === 'SUB') { frag.appendChild(node); return; }
-      var cls = node.className || '';
-      if (cls.indexOf('mfrac') >= 0 || cls.indexOf('mv') >= 0 || cls.indexOf('mn') >= 0) { frag.appendChild(node); return; }
-      frag.appendChild(node);
-    });
-    field.innerHTML = '';
-    field.appendChild(frag);
+      if (target) {
+        var nr = document.createRange();
+        nr.setStart(target, Math.min(toff, target.nodeValue.length));
+        nr.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(nr);
+      }
+    } catch (e) {}
   }
 
   function fieldTex(field) {
-    var raw = (field.getAttribute && field.getAttribute('data-tex')) || '';
-    if (!raw) {
-      var src = field.querySelector ? field.querySelector('.mf-src') : null;
-      if (src) raw = src.textContent || '';
-    }
+    var raw = (field && field.textContent) || '';
     return rawToLatex(raw);
     var out = '';
     Array.prototype.slice.call(field.childNodes).forEach(function (node) {
@@ -1012,7 +1007,7 @@
     } else {
       box.appendChild(field);
     }
-    var srcEl = field.querySelector('.mf-src');
+    var srcEl = field;
     var nr = document.createRange();
     nr.setStart(srcEl || field, 0); nr.collapse(true);
     if (sel) { sel.removeAllRanges(); sel.addRange(nr); }
@@ -1041,7 +1036,7 @@
     } else {
       rich.appendChild(field);
     }
-    var srcEl2 = field.querySelector('.mf-src');
+    var srcEl2 = field;
     var nr = document.createRange();
     nr.setStart(srcEl2 || field, 0); nr.collapse(true);
     if (sel) { sel.removeAllRanges(); sel.addRange(nr); }
@@ -3560,9 +3555,8 @@
       if (!t) return;
       if (t.classList && t.classList.contains('rich-answer')) { /* 富文本框内部处理 */ }
       if (t.tagName === 'TEXTAREA' && t.classList && t.classList.contains('inline-answer-text')) refreshAnswerPreview(t);
-      if (t.classList && t.classList.contains('mf-src')) {
-        var fld = t.closest('.mathfield');
-        if (fld) updateMathFieldRender(fld);
+      if (t.classList && t.classList.contains('mathfield')) {
+        updateMathFieldRender(t);
         return;
       }
       if (t.classList && t.classList.contains('mwi')) {
@@ -3600,9 +3594,8 @@
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Backspace') return;
       var t = e.target;
-      if (!t || !t.classList || !t.classList.contains('mf-src')) return;
-      var fld = t.closest('.mathfield');
-      if (!fld) return;
+      if (!t || !t.classList || !t.classList.contains('mathfield')) return;
+      var fld = t;
       if ((t.textContent || '').trim() === '') {
         e.preventDefault();
         var rich = t.closest('.rich-answer');
@@ -3614,7 +3607,7 @@
     // 公式框获得焦点 → 显示底部符号栏
     document.addEventListener('focusin', function (e) {
       var t = e.target;
-      if (t && t.classList && t.classList.contains('mathfield')) { showFormulaDock(); var _s = t.querySelector('.mf-src'); if (_s) _s.focus(); }
+      if (t && t.classList && t.classList.contains('mathfield')) showFormulaDock();
       if (t && t.classList && t.classList.contains('mf-src')) showFormulaDock();
     });
     document.addEventListener('mousedown', function (e) {

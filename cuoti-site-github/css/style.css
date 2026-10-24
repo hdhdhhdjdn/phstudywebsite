@@ -710,3 +710,11 @@ body.has-dock { padding-bottom: 180px; }
 .mathfield .mf-render.mf-empty { color: #98a2b3; font-size: 14px; }
 .mathfield .mf-src { position: absolute; left: 8px; right: 8px; top: 3px; bottom: 3px; z-index: 2; color: transparent; caret-color: #0b5cff; outline: none; white-space: nowrap; overflow: hidden; font-size: 16px; font-family: "Cambria Math", KaTeX_Main, "Times New Roman", serif; }
 .mathfield .mf-src:empty:before { content: attr(data-ph); color: transparent; }
+/* 公式框：可见文字 + 数学排版 */
+.mathfield { color: #1f2733; min-height: 28px; line-height: 1.6; white-space: pre-wrap; }
+.mathfield .mv { font-style: italic; font-family: "Cambria Math", KaTeX_Math, "Times New Roman", serif; }
+.mathfield sup, .mathfield sub { font-size: 0.72em; line-height: 0; }
+.mathfield .mfrac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; line-height: 1.1; text-align: center; margin: 0 2px; }
+.mathfield .mfrac .fnum { border-bottom: 1px solid currentColor; padding: 0 3px; }
+.mathfield .mfrac .fden { padding: 0 3px; }
+.mathfield:empty:before { content: attr(data-ph); color: #98a2b3; font-style: normal; }
