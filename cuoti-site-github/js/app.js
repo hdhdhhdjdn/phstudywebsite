@@ -946,7 +946,8 @@
 
   function activeMathField() {
     var ae = document.activeElement;
-    if (ae && ae.tagName === 'MATH-FIELD') return ae;
+    if (ae && ae.tagName === 'MATH-FIELD') { state.lastMathField = ae; return ae; }
+    if (state.lastMathField && document.body.contains(state.lastMathField)) return state.lastMathField;
     if (ae && ae.classList && ae.classList.contains('mf-src')) return ae.closest('.mathfield');
     if (ae && ae.classList && ae.classList.contains('mathfield')) return ae;
     var sel = window.getSelection();
@@ -3880,8 +3881,12 @@
     // 公式框获得焦点 → 显示底部符号栏
     document.addEventListener('focusin', function (e) {
       var t = e.target;
-      if (t && t.classList && t.classList.contains('mathfield')) showFormulaDock();
-      if (t && t.classList && t.classList.contains('mf-src')) showFormulaDock();
+      if (!t || !t.nodeType) return;
+      if (t.tagName === 'MATH-FIELD') { state.lastMathField = t; showFormulaDock(); return; }
+      if (t.classList && t.classList.contains('mathfield')) { state.lastMathField = t; showFormulaDock(); }
+      if (t.classList && t.classList.contains('mf-src')) showFormulaDock();
+      var fld = t.closest ? t.closest('.mathfield') : null;
+      if (fld) state.lastMathField = fld;
     });
     document.addEventListener('mousedown', function (e) {
       var t = e.target;
@@ -3899,7 +3904,14 @@
         var fldT = activeMathField();
         var texT = decodeURIComponent(tplBtn.getAttribute('data-dock-tex') || '');
         if (fldT && texT) {
-          try { fldT.focus(); fldT.insert(texT); } catch (e) {}
+          try {
+            fldT.focus();
+            fldT.insert(texT);
+            if (!String(fldT.value || '').trim()) fldT.value = texT;
+          } catch (e) {
+            try { fldT.value = (fldT.value || '') + texT; } catch (e2) {}
+          }
+          setTimeout(function () { try { fldT.focus(); } catch (e3) {} }, 30);
         }
         return;
       }
