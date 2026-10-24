@@ -698,3 +698,8 @@ main { margin: 0 0 0 238px; max-width: 1180px; padding: 34px 42px 90px; }
 body.has-dock { padding-bottom: 180px; }
 .mathfield .mf-slot { display: inline-block; min-width: 12px; }
 .mathfield .mf-paren { color: #6b7688; }
+/* 公式框：数学字体 */
+.mathfield { font-family: "Cambria Math", "Latin Modern Math", "Times New Roman", KaTeX_Main, serif; font-size: 16px; }
+.mathfield .mv { font-style: italic; font-family: KaTeX_Math, "Cambria Math", "Times New Roman", serif; }
+.mathfield .mn { font-style: normal; }
+.mathfield sup, .mathfield sub { font-size: 0.72em; }

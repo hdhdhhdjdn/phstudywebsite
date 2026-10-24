@@ -902,6 +902,36 @@
     return span;
   }
 
+  // 把公式框里的字母排成斜体、数字正体（看起来就是公式）
+  function restyleMathField(field) {
+    if (!field) return;
+    var frag = document.createDocumentFragment();
+    Array.prototype.slice.call(field.childNodes).forEach(function (node) {
+      if (node.nodeType === 3) {
+        var txt = node.nodeValue;
+        var re = /([A-Za-z]+|[0-9]+(?:\.[0-9]+)?)/g;
+        var last = 0, m;
+        while ((m = re.exec(txt)) !== null) {
+          if (m.index > last) frag.appendChild(document.createTextNode(txt.slice(last, m.index)));
+          var span = document.createElement('span');
+          if (/^[A-Za-z]+$/.test(m[0])) { span.className = 'mv'; span.textContent = m[0]; }
+          else { span.className = 'mn'; span.textContent = m[0]; }
+          frag.appendChild(span);
+          last = m.index + m[0].length;
+        }
+        if (last < txt.length) frag.appendChild(document.createTextNode(txt.slice(last)));
+        return;
+      }
+      if (node.nodeType !== 1) return;
+      if (node.tagName === 'SUP' || node.tagName === 'SUB') { frag.appendChild(node); return; }
+      var cls = node.className || '';
+      if (cls.indexOf('mfrac') >= 0 || cls.indexOf('mv') >= 0 || cls.indexOf('mn') >= 0) { frag.appendChild(node); return; }
+      frag.appendChild(node);
+    });
+    field.innerHTML = '';
+    field.appendChild(frag);
+  }
+
   function fieldTex(field) {
     var out = '';
     Array.prototype.slice.call(field.childNodes).forEach(function (node) {
@@ -3552,6 +3582,14 @@
       if (t.closest('#formula-dock')) return;
       if (t.closest('.mathfield')) return;
       hideFormulaDock();
+    });
+
+    // 公式框失焦后按数学字体重排
+    document.addEventListener('focusout', function (e) {
+      var t = e.target;
+      if (t && t.classList && t.classList.contains('mathfield')) {
+        setTimeout(function () { restyleMathField(t); }, 50);
+      }
     });
 
     // 点富文本里的公式块 → 修改
