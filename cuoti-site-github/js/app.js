@@ -972,15 +972,9 @@
   function makeMathField() {
     var span = document.createElement('span');
     span.className = 'mathfield';
-    var render = document.createElement('span');
-    render.className = 'mf-render';
-    var input = document.createElement('textarea');
-    input.className = 'mf-input';
-    input.rows = 1;
-    input.setAttribute('spellcheck', 'false');
-    input.setAttribute('placeholder', '在此处键入公式');
-    span.appendChild(render);
-    span.appendChild(input);
+    span.setAttribute('contenteditable', 'true');
+    span.setAttribute('data-ph', '在此处键入公式');
+    span.setAttribute('spellcheck', 'false');
     return span;
   }
 
@@ -1108,61 +1102,12 @@
 
   function updateMathFieldRender(field) {
     if (!field) return;
-    var input = field.querySelector('.mf-input');
-    var render = field.querySelector('.mf-render');
-    if (!input || !render) return;
-    var raw = input.value || '';
-    field.setAttribute('data-tex', raw);
-    if (!raw.trim()) { render.innerHTML = '<span class="mf-ph">在此处键入公式</span>'; return; }
-    try { render.innerHTML = safeMathHTML('$' + rawToLatex(raw) + '$'); } catch (e) { render.textContent = raw; }
+    field.setAttribute('data-tex', field.textContent || '');
   }
 
   function restyleMathField(field) {
-    if (!field) return;
-    var sel = window.getSelection();
-    var off = 0;
-    if (sel && sel.rangeCount && field.contains(sel.getRangeAt(0).startContainer)) {
-      var r0 = sel.getRangeAt(0).cloneRange();
-      r0.selectNodeContents(field);
-      r0.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset);
-      off = r0.toString().length;
-    }
-    var raw = field.textContent || '';
-    if (!raw) return;
-    // 拆成片段：x^2 / x_2 / a/b / 普通文本
-    var html = '';
-    var re = /([A-Za-z0-9)\]]+)\^\{?([^{}\s]+)\}?|([A-Za-z0-9)\]]+)_\{?([^{}\s]+)\}?|([A-Za-z0-9)\]]+)\/([A-Za-z0-9)\]]+)/g;
-    var last = 0, m;
-    function plain(txt) {
-      return String(txt).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; })
-        .replace(/([A-Za-z]+)/g, '<i class="mv">$1</i>');
-    }
-    while ((m = re.exec(raw)) !== null) {
-      if (m.index > last) html += plain(raw.slice(last, m.index));
-      if (m[1] != null) html += plain(m[1]) + '<sup>' + plain(m[2]) + '</sup>';
-      else if (m[3] != null) html += plain(m[3]) + '<sub>' + plain(m[4]) + '</sub>';
-      else if (m[5] != null) html += '<span class="mfrac"><span class="fnum">' + plain(m[5]) + '</span><span class="fden">' + plain(m[6]) + '</span></span>';
-      last = m.index + m[0].length;
-    }
-    if (last < raw.length) html += plain(raw.slice(last));
-    field.innerHTML = html;
-    // 恢复光标
-    try {
-      var walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT, null);
-      var count = 0, node, target = null, toff = 0;
-      while ((node = walker.nextNode())) {
-        var len = node.nodeValue.length;
-        if (count + len >= off) { target = node; toff = off - count; break; }
-        count += len;
-      }
-      if (target) {
-        var nr = document.createRange();
-        nr.setStart(target, Math.min(toff, target.nodeValue.length));
-        nr.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(nr);
-      }
-    } catch (e) {}
+    // 字体已由 CSS 统一，无需重建 DOM（避免破坏已转换的上标/分数）
+    return;
   }
 
   function fieldTex(field) {
@@ -3766,6 +3711,10 @@
       if (!t) return;
       if (t.classList && t.classList.contains('rich-answer')) { /* 富文本框内部处理 */ }
       if (t.tagName === 'TEXTAREA' && t.classList && t.classList.contains('inline-answer-text')) refreshAnswerPreview(t);
+      if (t && t.classList && t.classList.contains('mathfield')) {
+        updateMathFieldRender(t);
+        return;
+      }
       if (t && t.classList && t.classList.contains('mf-input')) {
         var fld0 = t.closest('.mathfield');
         if (fld0) updateMathFieldRender(fld0);
@@ -3788,6 +3737,10 @@
       var t = e.target;
       if (!t || !t.classList) return;
       if (t && t.tagName === 'MATH-FIELD') return;
+      if (t && t.classList && t.classList.contains('mathfield')) {
+        if (fieldConvertBeforeSpace(t)) e.preventDefault();
+        return;
+      }
       if (t && t.classList && t.classList.contains('mf-input')) return;
       if (t.classList && t.classList.contains('mathfield')) {
         if (fieldConvertBeforeSpace(t)) e.preventDefault();
@@ -3875,6 +3828,10 @@
     // 公式框失焦后按数学字体重排
     document.addEventListener('focusout', function (e) {
       var t = e.target;
+      if (t && t.classList && t.classList.contains('mathfield')) {
+        updateMathFieldRender(t);
+        return;
+      }
       if (t && t.classList && t.classList.contains('mf-input')) {
         var fld = t.closest('.mathfield');
         if (fld) {

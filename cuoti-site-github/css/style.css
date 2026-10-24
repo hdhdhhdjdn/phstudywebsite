@@ -821,3 +821,18 @@ math-field.mathfield::part(menu-toggle) { display: none; }
 .mathfield.editing .mf-render { display: block !important; font-size: 18px; opacity: .95; margin-bottom: 4px; border-bottom: 1px dashed #cfd8e3; padding-bottom: 3px; }
 .mathfield.editing .mf-input { display: block !important; }
 .mathfield:not(.editing) .mf-render { margin-bottom: 0; border-bottom: none; }
+/* 单行公式框：文字可见、数学字体，空格就地转上标/下标/分数 */
+.mathfield {
+  display: inline-block; min-width: 220px; padding: 6px 10px;
+  background: #f3f5f8; border: 1px solid #cfd8e3; border-radius: 6px;
+  font-family: KaTeX_Math, "Cambria Math", KaTeX_Main, "Times New Roman", serif !important;
+  font-size: 20px; line-height: 1.6; color: #111827; vertical-align: middle; margin: 0 3px;
+  white-space: pre-wrap;
+}
+.mathfield:focus { background: #fff; border-color: #7aa7ff; box-shadow: 0 0 0 2px rgba(90,140,255,.18); outline: none; }
+.mathfield:empty:before { content: attr(data-ph); color: #98a2b3; font-size: 15px; font-family: system-ui, sans-serif; }
+.mathfield sup, .mathfield sub { font-size: .72em; line-height: 0; }
+.mathfield .mfrac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; line-height: 1.1; text-align: center; }
+.mathfield .mfrac .fnum { border-bottom: 1px solid currentColor; padding: 0 3px; }
+.mathfield .mfrac .fden { padding: 0 3px; }
+.mathfield .mf-render, .mathfield .mf-input, .mathfield .mf-choices { display: none !important; }
