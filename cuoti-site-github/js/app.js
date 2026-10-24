@@ -802,10 +802,82 @@
     { id: 'ops', label: '运算符', keys: ['+', '−', '×', '÷', '±', '∓', '=', '≠', '≈', '≡', '≤', '≥', '≪', '≫', '∝', '⇔', '⇒', '∴', '∵', '∧', '∨', '¬', '⊕', '⊗', '⊙', '∗', '·', '∘'] },
     { id: 'arrows', label: '箭头', keys: ['→', '←', '↑', '↓', '↔', '⇄', '⇒', '⇐', '⇔', '↦', '↩', '↪', '⟶', '⟵', '⟹', '⟸', '⌦', '⤳', '⇀', '⇁'] },
     { id: 'units', label: '单位', keys: ['K', 'mol', 'dm', 'cm', 'mm', 'm', 's', 'min', 'kg', 'g', 'J', 'kJ', 'N', 'Pa', 'kPa', 'V', 'A', 'W', 'Hz', 'C', 'mol dm-3', 'g cm-3', 'm s-1', 'm s-2'] },
-    { id: 'struct', label: '结构', structs: [
-      { k: 'frac', label: '分式' }, { k: 'sup', label: '上标' }, { k: 'sub', label: '下标' },
-      { k: 'sqrt', label: '根号' }, { k: 'int', label: '积分' }, { k: 'sum', label: '求和' },
-      { k: 'lim', label: '极限' }, { k: 'paren', label: '括号' }, { k: 'matrix', label: '矩阵' }
+    { id: 'struct', label: '结构', groups: [
+      { title: '分式', items: [
+        { tex: '\\frac{}{}', label: '分式' },
+        { tex: '\\dfrac{}{}', label: '大分式' },
+        { tex: '\\tfrac{}{}', label: '小分式' },
+        { tex: 'a/b', label: '斜线分式' }
+      ] },
+      { title: '上下标', items: [
+        { tex: '^{}', label: '上标' },
+        { tex: '_{}', label: '下标' },
+        { tex: '{}_{}^{}', label: '上下标' },
+        { tex: '{}_{}^{}', label: '左右上下标' }
+      ] },
+      { title: '根式', items: [
+        { tex: '\\sqrt{}', label: '平方根' },
+        { tex: '\\sqrt[3]{}', label: '三次根' },
+        { tex: '\\sqrt[n]{}', label: 'n 次根' }
+      ] },
+      { title: '积分', items: [
+        { tex: '\\int_{}^{}', label: '单重积分' },
+        { tex: '\\iint_{}^{}', label: '二重积分' },
+        { tex: '\\iiint_{}^{}', label: '三重积分' },
+        { tex: '\\oint_{}^{}', label: '围道积分' }
+      ] },
+      { title: '大型运算符', items: [
+        { tex: '\\sum_{}^{}', label: '求和' },
+        { tex: '\\prod_{}^{}', label: '连乘' },
+        { tex: '\\bigcup_{}^{}', label: '并集' },
+        { tex: '\\bigcap_{}^{}', label: '交集' },
+        { tex: '\\bigvee_{}^{}', label: '析取' },
+        { tex: '\\bigwedge_{}^{}', label: '合取' }
+      ] },
+      { title: '括号', items: [
+        { tex: '\\left( \\right)', label: '圆括号' },
+        { tex: '\\left[ \\right]', label: '方括号' },
+        { tex: '\\left\\{ \\right\\}', label: '花括号' },
+        { tex: '\\left| \\right|', label: '绝对值' },
+        { tex: '\\left\\langle \\right\\rangle', label: '尖括号' }
+      ] },
+      { title: '函数', items: [
+        { tex: '\\sin\\left( \\right)', label: 'sin' },
+        { tex: '\\cos\\left( \\right)', label: 'cos' },
+        { tex: '\\tan\\left( \\right)', label: 'tan' },
+        { tex: '\\log_{}\\left( \\right)', label: 'log' },
+        { tex: '\\ln\\left( \\right)', label: 'ln' },
+        { tex: 'e^{}', label: 'e 的指数' }
+      ] },
+      { title: '极限与对数', items: [
+        { tex: '\\lim_{ \\to }', label: '极限' },
+        { tex: '\\limsup_{}', label: '上极限' },
+        { tex: '\\liminf_{}', label: '下极限' },
+        { tex: '\\log_{}', label: '对数' }
+      ] },
+      { title: '标注符号', items: [
+        { tex: '\\hat{}', label: '帽子' },
+        { tex: '\\bar{}', label: '横线' },
+        { tex: '\\vec{}', label: '矢量' },
+        { tex: '\\dot{}', label: '点' },
+        { tex: '\\ddot{}', label: '双点' },
+        { tex: '\\tilde{}', label: '波浪' },
+        { tex: '\\overline{}', label: '上划线' },
+        { tex: '\\underline{}', label: '下划线' }
+      ] },
+      { title: '矩阵', items: [
+        { tex: '\\begin{pmatrix} & \\\\ & \\end{pmatrix}', label: '2×2 圆括号' },
+        { tex: '\\begin{bmatrix} & \\\\ & \\end{bmatrix}', label: '2×2 方括号' },
+        { tex: '\\begin{vmatrix} & \\\\ & \\end{vmatrix}', label: '2×2 行列式' },
+        { tex: '\\begin{pmatrix} & & \\\\ & & \\\\ & & \\end{pmatrix}', label: '3×3' },
+        { tex: '\\begin{pmatrix} 1 & 0 \\\\ 0 & 1 \\end{pmatrix}', label: '单位矩阵' }
+      ] },
+      { title: '省略号', items: [
+        { tex: '\\cdots', label: '⋯' },
+        { tex: '\\ldots', label: '…' },
+        { tex: '\\vdots', label: '⋮' },
+        { tex: '\\ddots', label: '⋱' }
+      ] }
     ] }
   ];
 
@@ -821,6 +893,21 @@
     var tabs = DOCK_CATS.map(function (c) {
       return '<button type="button" class="fd-tab' + (c.id === DOCK_ACTIVE ? ' active' : '') + '" data-dock-cat="' + c.id + '">' + esc(c.label) + '</button>';
     }).join('');
+
+    if (cat.groups) {
+      var html = '';
+      cat.groups.forEach(function (g) {
+        html += '<div class="fd-group-title">' + esc(g.title) + '</div><div class="fd-tpl-grid">';
+        g.items.forEach(function (it) {
+          var preview = '';
+          try { preview = safeMathHTML('$' + it.tex + '$'); } catch (e) { preview = esc(it.label); }
+          html += '<button type="button" class="fd-tpl" data-dock-tex="' + encodeURIComponent(it.tex) + '" title="' + esc(it.label) + '">' + preview + '</button>';
+        });
+        html += '</div>';
+      });
+      box.innerHTML = '<div class="fd-tabs">' + tabs + '<span class="grow"></span><button type="button" class="fd-close" data-dock-close="1">✕ 收起</button></div>' + html;
+      return;
+    }
 
     var grid = '';
     if (cat.keys) {
@@ -3805,6 +3892,15 @@
       if (catBtn) { DOCK_ACTIVE = catBtn.getAttribute('data-dock-cat'); renderFormulaDock(); return; }
       var closeBtn = t.closest('[data-dock-close]');
       if (closeBtn) { hideFormulaDock(); return; }
+      var tplBtn = t.closest('[data-dock-tex]');
+      if (tplBtn) {
+        var fldT = activeMathField();
+        var texT = decodeURIComponent(tplBtn.getAttribute('data-dock-tex') || '');
+        if (fldT && texT) {
+          try { fldT.focus(); fldT.insert(texT); } catch (e) {}
+        }
+        return;
+      }
       var keyBtn = t.closest('[data-dock-key]');
       if (keyBtn) {
         var field = activeMathField();

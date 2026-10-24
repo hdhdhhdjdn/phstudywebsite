@@ -865,3 +865,8 @@ body.has-dock { padding-bottom: 260px; }
 #formula-dock .fd-grid { display: grid !important; width: 100%; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)) !important; gap: 6px; }
 #formula-dock .fd-tabs { display: flex !important; flex-wrap: wrap; }
 #formula-dock .fd-sym, #formula-dock .fd-struct { min-width: 46px; }
+/* 结构模板画廊（Word 风格） */
+#formula-dock .fd-group-title { font-size: 13px; color: #6b7688; margin: 12px 0 6px; font-weight: 600; }
+#formula-dock .fd-tpl-grid { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)) !important; gap: 8px; }
+#formula-dock .fd-tpl { min-height: 56px; border: 1px solid #dfe5ee; background: #fff; border-radius: 8px; cursor: pointer; font-size: 18px; color: #1f2733; display: flex; align-items: center; justify-content: center; padding: 6px; }
+#formula-dock .fd-tpl:hover { border-color: #7aa7ff; background: #eef5ff; }
