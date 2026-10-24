@@ -738,6 +738,50 @@
   // ---------- 答案公式预览（可点击编辑） ----------
   var MATH_TOKEN_RE = /(\$[^$\n]+\$)|([A-Za-z0-9)\]]\s*\^\s*(?:\{[^}\n]+\}|[A-Za-z0-9+\-]+))|([A-Za-z0-9)\]]\s*_\s*(?:\{[^}\n]+\}|[A-Za-z0-9]+))|((?<![A-Za-z0-9/])(?:[A-Za-z]\d*|\d+[A-Za-z]?)\s*\/\s*(?:[A-Za-z]\d*|\d+)(?![A-Za-z0-9/]))/g;
 
+  function mwEsc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  // 把一个公式片段拆成可编辑的小格子
+  function mathTokenWidget(token) {
+    var m;
+    // x^2 / x^{n+1}
+    m = token.match(/^([A-Za-z0-9)\]])\s*\^\s*(?:\{([^}]*)\}|([A-Za-z0-9+\-]+))$/);
+    if (m) {
+      return '<span class="mw" data-kind="sup">' +
+        '<input class="mwi mwb" value="' + mwEsc(m[1]) + '" size="2">' +
+        '<span class="mwop">^</span>' +
+        '<input class="mwi mwe" value="' + mwEsc(m[2] != null ? m[2] : m[3]) + '" size="3">' +
+        '</span>';
+    }
+    // x_2
+    m = token.match(/^([A-Za-z0-9)\]])\s*_\s*(?:\{([^}]*)\}|([A-Za-z0-9]+))$/);
+    if (m) {
+      return '<span class="mw" data-kind="sub">' +
+        '<input class="mwi mwb" value="' + mwEsc(m[1]) + '" size="2">' +
+        '<span class="mwop">_</span>' +
+        '<input class="mwi mwe" value="' + mwEsc(m[2] != null ? m[2] : m[3]) + '" size="3">' +
+        '</span>';
+    }
+    // a/b
+    m = token.match(/^([A-Za-z0-9)\]]+)\s*\/\s*([A-Za-z0-9)\]]+)$/);
+    if (m) {
+      return '<span class="mw mwf" data-kind="frac">' +
+        '<span class="mwfrac">' +
+        '<input class="mwi mwn" value="' + mwEsc(m[1]) + '" size="3">' +
+        '<span class="mwline"></span>' +
+        '<input class="mwi mwd" value="' + mwEsc(m[2]) + '" size="3">' +
+        '</span></span>';
+    }
+    // $...$ LaTeX
+    m = token.match(/^\$([^$]+)\$$/);
+    if (m) {
+      return '<span class="mw mwl" data-kind="tex">' +
+        '<input class="mwi mwt" value="' + mwEsc(m[1]) + '" size="8">' +
+        '<span class="mtexpreview"></span>' +
+        '</span>';
+    }
+    return esc(token);
+  }
+
   function mathPreviewHTML(raw) {
     var txt = String(raw || '');
     var out = '';
@@ -746,14 +790,38 @@
     MATH_TOKEN_RE.lastIndex = 0;
     while ((m = MATH_TOKEN_RE.exec(txt)) !== null) {
       if (m.index > last) out += esc(txt.slice(last, m.index));
-      var token = m[0];
-      var rendered;
-      try { rendered = renderMathText(token); } catch (e) { rendered = esc(token); }
-      out += '<span class="mtok" data-action="edit-mtoken" data-raw="' + encodeURIComponent(token) + '" title="点击编辑">' + rendered + '</span>';
-      last = m.index + token.length;
+      out += mathTokenWidget(m[0]);
+      last = m.index + m[0].length;
     }
     if (last < txt.length) out += esc(txt.slice(last));
     return out;
+  }
+
+  // 从预览 DOM 还原成文本
+  function serializeMathPreview(box) {
+    var out = '';
+    Array.prototype.slice.call(box.childNodes).forEach(function (node) {
+      if (node.nodeType === 3) { out += node.nodeValue; return; }
+      if (node.nodeType !== 1) return;
+      var kind = node.getAttribute('data-kind');
+      if (!kind) { out += node.textContent; return; }
+      var inputs = node.querySelectorAll('input');
+      var vals = Array.prototype.map.call(inputs, function (i) { return i.value; });
+      if (kind === 'sup') out += (vals[0] || '') + '^' + (vals[1] || '');
+      else if (kind === 'sub') out += (vals[0] || '') + '_' + (vals[1] || '');
+      else if (kind === 'frac') out += (vals[0] || '') + '/' + (vals[1] || '');
+      else if (kind === 'tex') out += '$' + (vals[0] || '') + '$';
+    });
+    return out;
+  }
+
+  function updateTexPreviews(box) {
+    Array.prototype.slice.call(box.querySelectorAll('.mw[data-kind="tex"]')).forEach(function (w) {
+      var input = w.querySelector('input');
+      var prev = w.querySelector('.mtexpreview');
+      if (!input || !prev) return;
+      try { prev.innerHTML = renderMathText('$' + input.value + '$'); } catch (e) {}
+    });
   }
 
   function refreshAnswerPreview(ta) {
@@ -763,8 +831,9 @@
     var box = host.querySelector('.answer-preview');
     if (!box) return;
     var val = String(ta.value || '').trim();
-    if (!val) { box.innerHTML = '<span class="muted">公式会实时显示在这里，点公式可修改</span>'; return; }
+    if (!val) { box.innerHTML = '<span class="muted">公式会实时显示在这里；点格子里的字母/数字可直接修改</span>'; return; }
     box.innerHTML = mathPreviewHTML(val);
+    updateTexPreviews(box);
   }
 
   function refreshAllAnswerPreviews() {
@@ -3033,9 +3102,24 @@
       var t = e.target;
       if (!t) return;
       if (t.classList && t.classList.contains('inline-answer-text')) refreshAnswerPreview(t);
+      if (t.classList && t.classList.contains('mwi')) {
+        var box = t.closest('.answer-preview');
+        var ta2 = box && box.parentNode ? box.parentNode.querySelector('textarea') : null;
+        if (box && ta2) ta2.value = serializeMathPreview(box);
+      }
       if (t.id === 'mtoken-input') {
         var prev = $('#mtoken-preview');
         if (prev) { try { prev.innerHTML = renderMathText(t.value); } catch (err) {} }
+      }
+    });
+
+    // 公式格子失焦后重新渲染（保持格式一致）
+    document.addEventListener('focusout', function (e) {
+      var t = e.target;
+      if (t && t.classList && t.classList.contains('mwi')) {
+        var box = t.closest('.answer-preview');
+        var ta2 = box && box.parentNode ? box.parentNode.querySelector('textarea') : null;
+        if (box && ta2) setTimeout(function () { ta2.value = serializeMathPreview(box); refreshAnswerPreview(ta2); }, 120);
       }
     });
 
