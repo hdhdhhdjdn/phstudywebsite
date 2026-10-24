@@ -961,19 +961,27 @@
     if (!field || !tex) return false;
     try { field.focus(); } catch (e) {}
     if (field.tagName === 'MATH-FIELD') {
+      // 优先用 MathLive 的插入接口（会自动生成可编辑空位）
       try {
-        var cur = field.value || '';
+        var before = String(field.value || '');
+        field.insert(tex);
+        var after = String(field.value || '');
+        if (after && after !== before) {
+          setTimeout(function () {
+            try { field.focus(); } catch (e2) {}
+            try { field.executeCommand('moveToNextPlaceholder'); } catch (e3) {}
+          }, 30);
+          return true;
+        }
+      } catch (e) {}
+      // 兜底：直接写值
+      try {
+        var cur = String(field.value || '');
         field.value = cur ? (cur + tex) : tex;
-        setTimeout(function () {
-          try { field.focus(); } catch (e2) {}
-          // 把光标送进第一个空位，显示可编辑的虚线框
-          try { field.executeCommand('moveToMathfieldStart'); } catch (e3) {}
-          try { field.executeCommand('moveToNextPlaceholder'); } catch (e4) {}
-        }, 40);
+        setTimeout(function () { try { field.focus(); } catch (e2) {} }, 30);
         return true;
       } catch (e) { return false; }
     }
-    // 兜底可编辑框
     try {
       field.textContent = (field.textContent || '') + tex;
       field.setAttribute('data-tex', field.textContent);
@@ -981,7 +989,7 @@
     } catch (e) { return false; }
   }
 
-  function dockInsertText(field, txt) {
+  function dockInsertText(field, txt) {  function dockInsertText(field, txt) {
     if (field && field.querySelector) {
       var ta = field.querySelector('.mf-input');
       if (ta) {

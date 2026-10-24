@@ -873,3 +873,5 @@ body.has-dock { padding-bottom: 260px; }
 /* MathLive 空位占位更明显 */
 math-field.mathfield::part(placeholder),
 math-field.mathfield .ML__placeholder { color: #7aa7ff; }
+/* MathLive 空位/占位可见 */
+math-field.mathfield { --ml-placeholder-color: #2b6cb0; }
