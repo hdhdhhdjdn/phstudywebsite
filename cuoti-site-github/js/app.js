@@ -236,17 +236,25 @@
   var CHEM_ELEMENTS = ('H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn ' +
     'Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pt Au Hg Pb Bi ' +
     'Ra Ac Th U W Re Os Ir Ta Hf').split(' ');
-  var CHEM_RE = new RegExp('(?:' + CHEM_ELEMENTS.map(function (e) { return e + '\\d*'; }).join('|') + ')+', 'g');
+  // 化学式：支持括号基团，如 Mg(OH)2、Ca(NO3)2、H2O2、KMnO4
+  var CHEM_RE = /(?:[A-Z][a-z]?\d*|\((?:[A-Z][a-z]?\d*)+\)\d*)+/g;
   function formatChem(str) {
     return String(str).replace(CHEM_RE, function (m) {
-      if (!/[0-9]/.test(m)) return m;              // 没数字不用下标
-      if (m.length < 2) return m;
-      return m.replace(/([A-Z][a-z]?)([0-9]+)/g, '$1<sub>$2</sub>');
+      if (!/[0-9]/.test(m) || m.length < 2) return m;
+      var syms = m.match(/[A-Z][a-z]?/g) || [];
+      for (var i = 0; i < syms.length; i++) {
+        if (CHEM_ELEMENTS.indexOf(syms[i]) < 0) return m;
+      }
+      // 排除 P1 / S1 这种试卷题号：单个元素符号 + 数字 1
+      if (syms.length === 1 && syms[0].length === 1 && /^[A-Z][a-z]?1$/.test(m)) return m;
+      return m.replace(/([A-Z][a-z]?|[)])(\d+)/g, function (all, head, digits) {
+        return head + '<sub>' + digits + '</sub>';
+      });
     });
   }
-  // 单位指数：dm-3 -> dm⁻³，h-1 -> h⁻¹
+  // 单位指数：dm-3 -> dm³ 的负指数，支持 moldm-3h-1
   function formatUnits(str) {
-    return String(str).replace(/(?<![A-Za-z0-9])([A-Za-z]{1,4})-([0-9]+)(?![0-9])/g, '$1<sup>-$2</sup>');
+    return String(str).replace(/(?<![A-Za-z])([A-Za-z]{1,8})-([0-9]+)(?![0-9])/g, '$1<sup>-$2</sup>');
   }
   function formatPlainMath(str) {
     return formatUnits(formatChem(String(str)));
