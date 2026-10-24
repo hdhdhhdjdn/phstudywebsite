@@ -824,6 +824,37 @@
     });
   }
 
+  // 输入 x^2 后按空格 → 自动变成 $x^{2}$（预览显示 x²）
+  var QUICK_LATEX_RE = /([A-Za-z0-9)\]]+)\^\{([^}]*)\}|([A-Za-z0-9)\]]+)\^([A-Za-z0-9+\-]+)|([A-Za-z0-9)\]]+)_\{([^}]*)\}|([A-Za-z0-9)\]]+)_([A-Za-z0-9]+)|([A-Za-z0-9)\]]+)\/([A-Za-z0-9)\]]+)$/;
+
+  function quickLatexFrom(tok) {
+    var m;
+    m = tok.match(/^([A-Za-z0-9)\]]+)\^\{?([^{}]+)\}?$/);
+    if (m) return '$' + m[1] + '^{' + m[2] + '}$';
+    m = tok.match(/^([A-Za-z0-9)\]]+)_\{?([^{}]+)\}?$/);
+    if (m) return '$' + m[1] + '_{' + m[2] + '}$';
+    m = tok.match(/^([A-Za-z0-9)\]]+)\/([A-Za-z0-9)\]]+)$/);
+    if (m) return '$\\frac{' + m[1] + '}{' + m[2] + '}$';
+    return null;
+  }
+
+  function convertBeforeSpace(ta) {
+    var val = String(ta.value || '');
+    var pos = ta.selectionStart;
+    if (typeof pos !== 'number') return false;
+    var before = val.slice(0, pos);
+    var m = before.match(/(\$[^$]*\$|[A-Za-z0-9)\]]+(?:\^\{?[A-Za-z0-9+\-]+\}?|_\{?[A-Za-z0-9]+\}?|\/[A-Za-z0-9)\]]+))$/);
+    if (!m) return false;
+    var tok = m[0];
+    if (tok.charAt(0) === '$') return false;
+    var latex = quickLatexFrom(tok);
+    if (!latex) return false;
+    ta.value = before.slice(0, pos - tok.length) + latex + ' ' + val.slice(pos);
+    var newPos = pos - tok.length + latex.length + 1;
+    ta.selectionStart = ta.selectionEnd = newPos;
+    return true;
+  }
+
   function refreshAnswerPreview(ta) {
     if (!ta) return;
     var host = ta.parentNode;
@@ -3110,6 +3141,17 @@
       if (t.id === 'mtoken-input') {
         var prev = $('#mtoken-preview');
         if (prev) { try { prev.innerHTML = renderMathText(t.value); } catch (err) {} }
+      }
+    });
+
+    // 答题框里输入 x^2 / x_2 / a/b 后按空格 → 立刻变成公式
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== ' ' || e.isComposing) return;
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains('inline-answer-text')) return;
+      if (convertBeforeSpace(t)) {
+        e.preventDefault();
+        refreshAnswerPreview(t);
       }
     });
 
