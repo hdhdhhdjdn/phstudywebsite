@@ -860,3 +860,8 @@ math-field.mathfield::part(virtual-keyboard-toggle), math-field.mathfield::part(
 .fd-struct { font-size: 14px; background: #f8fbff; }
 .fd-sym:hover, .fd-struct:hover { border-color: #7aa7ff; background: #eef5ff; }
 body.has-dock { padding-bottom: 260px; }
+/* 修正符号栏容器布局（旧 flex 样式干扰） */
+#formula-dock .fd-inner { display: block !important; width: 100%; max-width: 1200px; margin: 0 auto; }
+#formula-dock .fd-grid { display: grid !important; width: 100%; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)) !important; gap: 6px; }
+#formula-dock .fd-tabs { display: flex !important; flex-wrap: wrap; }
+#formula-dock .fd-sym, #formula-dock .fd-struct { min-width: 46px; }
