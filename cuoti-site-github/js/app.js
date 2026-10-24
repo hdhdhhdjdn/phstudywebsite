@@ -275,6 +275,16 @@
     return formatUnits(formatChem(formatMathShortcuts(String(str))));
   }
 
+  // 渲染失败时回退成原文，绝不显示 undefined
+  function safeMathHTML(text) {
+    var html = '';
+    try { html = renderMathText(text); } catch (e) { html = ''; }
+    if (html == null || html === '' || html === 'undefined' || html === 'null') {
+      html = esc(String(text == null ? '' : text));
+    }
+    return html;
+  }
+
   function renderMathText(text) {
     var text0 = String(text == null ? '' : text).replace(/\r\n/g, '\n');
     var hasKatex = !!(typeof window !== 'undefined' && window.katex && typeof window.katex.renderToString === 'function');
@@ -993,6 +1003,7 @@
     }
     function atom(str, i) {
       var ch = str[i];
+      if (i >= str.length || ch == null) return { tex: '', next: i };
       if (ch === '(') {
         var g = readGroup(str, i);
         return { tex: '\\left(' + smartLatex(g.inner) + '\\right)', next: g.next };
@@ -1010,6 +1021,10 @@
         var mark = str[i] === '^' ? '^' : '_';
         i++;
         var script = '';
+        if (i >= str.length || str[i] == null) {
+          tex += mark + '{}';
+          break;
+        }
         if (str[i] === '(') {
           // 括号：整个括号内容作为指数/下标
           var g = readGroup(str, i);
@@ -1038,6 +1053,7 @@
         i = b.next;
         // 紧跟着的 / 只作用于当前这个原子
         if (str[i] === '/') {
+          if (i + 1 >= str.length) { out += b.tex + '/'; i++; continue; }
           var c = atom(str, i + 1);
           var c2 = withScript(c.tex, str, c.next);
           i = c2.next;
@@ -1080,7 +1096,7 @@
     var raw = input.value || '';
     field.setAttribute('data-tex', raw);
     if (!raw.trim()) { render.innerHTML = '<span class="mf-ph">在此处键入公式</span>'; return; }
-    try { render.innerHTML = renderMathText('$' + rawToLatex(raw) + '$'); } catch (e) { render.textContent = raw; }
+    try { render.innerHTML = safeMathHTML('$' + rawToLatex(raw) + '$'); } catch (e) { render.textContent = raw; }
   }
 
   function restyleMathField(field) {
@@ -1396,7 +1412,7 @@
       var input = w.querySelector('input');
       var prev = w.querySelector('.mtexpreview');
       if (!input || !prev) return;
-      try { prev.innerHTML = renderMathText('$' + input.value + '$'); } catch (e) {}
+      try { prev.innerHTML = safeMathHTML('$' + input.value + '$'); } catch (e) {}
     });
   }
 
@@ -1453,7 +1469,7 @@
     if (input) input.value = String(raw || '');
     var prev = $('#mtoken-preview');
     if (prev) {
-      try { prev.innerHTML = renderMathText(String(raw || '')); } catch (e) { prev.textContent = raw; }
+      try { prev.innerHTML = safeMathHTML(String(raw || '')); } catch (e) { prev.textContent = raw; }
     }
     showModal('modal-math-token');
     if (input) setTimeout(function () { input.focus(); input.select(); }, 60);
@@ -1466,7 +1482,7 @@
     var next = input.value;
     if (ctx.chip) {
       ctx.chip.setAttribute('data-tex', next);
-      try { ctx.chip.innerHTML = renderMathText('$' + next + '$'); } catch (e) { ctx.chip.textContent = next; }
+      try { ctx.chip.innerHTML = safeMathHTML('$' + next + '$'); } catch (e) { ctx.chip.textContent = next; }
       closeModal('modal-math-token');
       toast('公式已更新', 'ok');
       return;
@@ -3742,7 +3758,7 @@
       }
       if (t.id === 'mtoken-input') {
         var prev = $('#mtoken-preview');
-        if (prev) { try { prev.innerHTML = renderMathText(t.value); } catch (err) {} }
+        if (prev) { try { prev.innerHTML = safeMathHTML(t.value); } catch (err) {} }
       }
     });
 
@@ -3852,7 +3868,7 @@
       var input = $('#mtoken-input');
       if (input) input.value = tex;
       var prev = $('#mtoken-preview');
-      if (prev) { try { prev.innerHTML = renderMathText('$' + tex + '$'); } catch (err) {} }
+      if (prev) { try { prev.innerHTML = safeMathHTML('$' + tex + '$'); } catch (err) {} }
       showModal('modal-math-token');
       if (input) setTimeout(function () { input.focus(); input.select(); }, 60);
     });
