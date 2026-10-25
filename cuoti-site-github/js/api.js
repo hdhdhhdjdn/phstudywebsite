@@ -110,8 +110,17 @@
     tag: function (itemId) {
       return req('POST', '/api/tag', { itemId: itemId });
     },
-    detectFigure: function (itemId, imageId) {
-      return req('POST', '/api/detect-figure', { itemId: itemId, imageId: imageId || '' });
+    detectFigure: function (itemId, imageId, hintText) {
+      return req('POST', '/api/detect-figure', { itemId: itemId, imageId: imageId || '', hintText: hintText || '' });
+    },
+    listUsers: function () {
+      return req('GET', '/api/users');
+    },
+    updateUser: function (id, patch) {
+      return req('PATCH', '/api/users/' + id, patch);
+    },
+    detectFigures: function (itemId, imageId) {
+      return req('POST', '/api/detect-figures', { itemId: itemId, imageId: imageId || '' });
     },
     solvePart: function (itemId, partLabel, partText, answerText, answerImageIds) {
       return req('POST', '/api/solve-part', { itemId: itemId, partLabel: partLabel, partText: partText, answerText: answerText || '', answerImageIds: answerImageIds || [] });

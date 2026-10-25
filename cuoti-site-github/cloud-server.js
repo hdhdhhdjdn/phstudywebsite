@@ -402,14 +402,14 @@ async function callTagAPI(cfg, item) {
   };
 }
 
-async function callFigureAPI(cfg, item, forceImageId) {
+async function callFigureAPI(cfg, item, forceImageId, hintText) {
   const imageIds = (item && item.imageIds) || [];
   if (!imageIds.length) throw new Error('这道题没有图片');
   const pickId = (forceImageId && imageIds.indexOf(forceImageId) >= 0) ? forceImageId : imageIds[0];
   const file = path.join(UPLOAD_DIR, String(pickId) + '.jpg');
   if (!fs.existsSync(file)) throw new Error('图片文件不存在');
   const b64 = fs.readFileSync(file).toString('base64');
-  const prompt = '这是一道题目图片，可能同时包含题干文字和图形。请找出图形/图表部分的矩形区域，用相对坐标返回（左上角 0,0，右下角 1,1）：{"found":true 或 false,"box":{"x":0.5,"y":0.05,"w":0.45,"h":0.9},"note":"简述图形内容"}。box 必须包住图形、不含题干文字；没有图形时 found 为 false。只输出 JSON。';
+  const prompt = (hintText ? ('下面是一整页试卷。请只找出"属于这道题"的图形/图表区域（题干如下）。\n题目：' + String(hintText).slice(0, 400) + '\n') : '这是一道题目图片，可能同时包含题干文字和图形。') + '请找出图形/图表部分的矩形区域，用相对坐标返回（左上角 0,0，右下角 1,1）：{"found":true 或 false,"box":{"x":0.5,"y":0.05,"w":0.45,"h":0.9},"note":"简述图形内容"}。box 必须包住图形、不含题干文字；没有图形时 found 为 false。只输出 JSON。';
   const url = cfg.gradeBase.replace(/\/+$/, '') + '/chat/completions';
   const resp = await fetch(url, {
     method: 'POST',
@@ -791,7 +791,7 @@ async function handleAPI(req, res, pathname, url) {
     const cfg = getConfig();
     if (!cfg.gradeKey) return sendJSON(res, 400, { error: '还没有配置 AI 密钥，请管理员到「设置」里填写' });
     try {
-      const result = await callFigureAPI(cfg, it, body.imageId);
+      const result = await callFigureAPI(cfg, it, body.imageId, body.hintText);
       return sendJSON(res, 200, result);
     } catch (err) {
       console.error('[figure]', err.message);
@@ -999,6 +999,13 @@ async function handleAPI(req, res, pathname, url) {
     const body = await readJSON(req);
     if (body.role === 'admin' || body.role === 'student') db.users[idx].role = body.role;
     if (typeof body.disabled === 'boolean') db.users[idx].disabled = body.disabled;
+    if (typeof body.displayName === 'string' && body.displayName.trim()) db.users[idx].displayName = body.displayName.trim().slice(0, 30);
+    if (typeof body.username === 'string' && body.username.trim()) {
+      const un = body.username.trim();
+      if (!/^[A-Za-z0-9_-]{3,20}$/.test(un)) return sendJSON(res, 400, { error: '登录名需 3-20 位字母/数字/下划线' });
+      if (db.users.some(function (u) { return u.id !== db.users[idx].id && String(u.username).toLowerCase() === un.toLowerCase(); })) return sendJSON(res, 400, { error: '登录名已被占用' });
+      db.users[idx].username = un;
+    }
     save();
     return sendJSON(res, 200, publicUser(db.users[idx]));
   }

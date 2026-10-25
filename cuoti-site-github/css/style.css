@@ -881,3 +881,10 @@ math-field.mathfield { --ml-placeholder-color: #2b6cb0; }
 .pick-item:hover { background: #f4f8ff; }
 .pick-no { flex: none; font-weight: 600; color: #1b64d1; }
 .pick-text { color: #3b4657; font-size: 13px; line-height: 1.5; }
+/* 账号管理 */
+.admin-user-list { margin-top: 10px; overflow-x: auto; }
+.admin-users { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-users th, .admin-users td { padding: 8px 10px; border-bottom: 1px solid #e6ebf2; text-align: left; }
+.admin-users th { background: #f6f9fe; color: #52607a; font-weight: 600; }
+.admin-user-ops { white-space: nowrap; }
+.admin-user-ops .link { margin-right: 10px; }

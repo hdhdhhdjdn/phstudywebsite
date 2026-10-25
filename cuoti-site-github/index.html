@@ -146,8 +146,18 @@
         <div class="btn-row">
           <button class="btn primary" data-action="save-grade-config">保存并启用</button>
           <button class="btn" data-action="classify-all">AI 自动分类全部错题</button>
+          <button class="btn primary" data-action="reprocess-all">🔄 自动重新识别全部（重裁图形 + 重分类）</button>
           <span id="cfg-status" class="muted">检测中…</span>
         </div>
+      </div>
+      <div class="card pad cloud-admin-only">
+        <h3>账号管理</h3>
+        <p class="muted">查看已注册账号、角色与状态；停用后该账号无法登录。</p>
+        <div class="btn-row">
+          <button class="btn" data-action="admin-users-refresh">刷新账号列表</button>
+          <span id="admin-users-status" class="muted"></span>
+        </div>
+        <div id="admin-user-list" class="admin-user-list"></div>
       </div>
       <div class="card pad cloud-admin-only">
         <h3>题库包（含图片）</h3>
@@ -232,6 +242,9 @@
         </label>
       </div>
       <label class="field"><span>来源 / 试卷</span><input id="e-source" placeholder="例如：化学月考 第 1 页 Q4"></label>
+      <label class="field"><span>只导入题号（如 1,3；留空 = 全部）</span>
+        <input id="e-pick-nums" placeholder="识别到多道大题时，只导入这些题号">
+      </label>
       <label class="field"><span>知识点标签（用逗号分隔）</span>
         <input id="e-topics" list="topic-suggestions" placeholder="例如：键能, 生成焓">
         <datalist id="topic-suggestions"></datalist>

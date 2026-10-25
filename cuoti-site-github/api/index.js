@@ -494,6 +494,44 @@ async function callGradeAPI(cfg, sub, item, imageMap) {
 }
 
 // ---------------- 图片转文字（OCR） ----------------
+// ---------------- AI 找出整页所有图形 ----------------
+async function callFigureListAPI(cfg, item, imageMap, forceImageId) {
+  const imageIds = (item && item.imageIds) || [];
+  if (!imageIds.length) throw new Error('这道题没有图片');
+  const pickId = (forceImageId && imageIds.indexOf(forceImageId) >= 0) ? forceImageId : imageIds[0];
+  const buf = await readImage((imageMap || {})[pickId]);
+  if (!buf || !buf.length) throw new Error('图片文件不存在');
+  const b64 = buf.toString('base64');
+  const prompt = '这是一整页试卷照片/截图。请按从上到下的顺序，只找出页面中真正的图形区域（坐标图、曲线图、示意图、装置图、能级图、数据表格），相对坐标（左上 0,0，右下 1,1）：{"boxes":[{"x":0.1,"y":0.2,"w":0.5,"h":0.25}]}。严格规则：不要框选纯文字段落、题号标题、选项列表、网页按钮栏（如 Full screen / Save）、卡片边框、深色背景块、以及包含大量文字的文本框；只框"图形本身"。没有图形时返回空数组。只输出 JSON。';
+  const url = cfg.gradeBase.replace(/\/+$/, '') + '/chat/completions';
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.gradeKey },
+    body: JSON.stringify({
+      model: cfg.gradeModel,
+      reasoning_effort: /^glm-5/i.test(String(cfg.gradeModel || '')) ? 'low' : undefined,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: '你是图像版面分析助手，只输出 JSON。' },
+        { role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64 } }] }
+      ],
+      temperature: 0.1,
+      max_tokens: 1200
+    })
+  });
+  if (!resp.ok) { const t = await resp.text(); throw new Error('接口返回 ' + resp.status + '：' + String(t).slice(0, 200)); }
+  const data = await resp.json();
+  const raw = extractMessageText(data);
+  if (!raw) throw modelEmptyError(data);
+  const parsed = extractJSON(raw) || {};
+  const num = function (v) { const x = Number(v); return isFinite(x) ? Math.min(1, Math.max(0, x)) : 0; };
+  const boxes = Array.isArray(parsed.boxes) ? parsed.boxes.map(function (b) {
+    return { x: num(b.x), y: num(b.y), w: num(b.w), h: num(b.h) };
+  }).filter(function (b) { return b.w > 0.02 && b.h > 0.02; }) : [];
+  boxes.sort(function (a, b) { return a.y - b.y; });
+  return { boxes: boxes };
+}
+
 // ---------------- AI 定位图形区域 ----------------
 // ---------------- AI 识别 IB 知识点 ----------------
 async function callTagAPI(cfg, item, imageMap) {
@@ -553,14 +591,14 @@ async function callTagAPI(cfg, item, imageMap) {
   };
 }
 
-async function callFigureAPI(cfg, item, imageMap, forceImageId) {
+async function callFigureAPI(cfg, item, imageMap, forceImageId, hintText) {
   const imageIds = (item && item.imageIds) || [];
   if (!imageIds.length) throw new Error('这道题没有图片');
   const pickId = (forceImageId && imageIds.indexOf(forceImageId) >= 0) ? forceImageId : imageIds[0];
   const buf = await readImage((imageMap || {})[pickId]);
   if (!buf || !buf.length) throw new Error('图片文件不存在');
   const b64 = buf.toString('base64');
-  const prompt = '这是一道题目图片，可能同时包含题干文字和图形。请找出图形/图表部分的矩形区域，用相对坐标返回（左上角 0,0，右下角 1,1）：{"found":true 或 false,"box":{"x":0.5,"y":0.05,"w":0.45,"h":0.9},"note":"简述图形内容"}。box 必须包住图形、不含题干文字；没有图形时 found 为 false。只输出 JSON。';
+  const prompt = (hintText ? ('下面是一整页试卷。请只找出"属于这道题"的图形/图表区域（题干如下）。\n题目：' + String(hintText).slice(0, 400) + '\n') : '这是一道题目图片，可能同时包含题干文字和图形。') + '只找真正的图形（坐标图、曲线、示意图、装置图、能效图、表格），不要框选纯文字段落、题号标题、选项列表、按钮栏（Full screen/Save 等）、深色背景块或文字卡片。请找出图形/图表部分的矩形区域，用相对坐标返回（左上角 0,0，右下角 1,1）：{"found":true 或 false,"box":{"x":0.5,"y":0.05,"w":0.45,"h":0.9},"note":"简述图形内容"}。box 必须包住图形、不含题干文字；没有图形时 found 为 false。只输出 JSON。';
   const url = cfg.gradeBase.replace(/\/+$/, '') + '/chat/completions';
   const resp = await fetch(url, {
     method: 'POST',
@@ -650,7 +688,11 @@ function splitQuestionsByNumber(text) {
   const t = String(text || '').replace(/\r/g, '');
   const lines = t.split('\n');
   const marks = [];
-  lines.forEach(function (ln, i) { if (/^\s*\d{1,2}\s*[.)]\s+\S/.test(ln)) marks.push(i); });
+  lines.forEach(function (ln, i) {
+    if (/^\s*\d{1,2}\s*[.)]\s+\S/.test(ln)) { marks.push(i); return; }
+    if (/^\s*\d{1,2}\s*\/\s*\d{1,2}\s*$/.test(ln)) { marks.push(i); return; }
+    if (/^\s*exercise\s+\d+/i.test(ln)) { marks.push(i); return; }
+  });
   if (marks.length < 2) return [t.trim()];
   const nums = marks.map(function (i) { return parseInt(lines[i].trim(), 10); });
   let inc = 0;
@@ -677,7 +719,7 @@ async function callTranscribeAPI(cfg, item, imageMap) {
   }
   if (!bufs.length) throw new Error('图片文件不存在');
 
-  const PROMPT = "请识别这张图片中的题目文字，并以 JSON 返回：{\"text\":\"题目文字\",\"hasImage\":true 或 false}\ntext 要求：\n1. 保留题号、选项、单位、数字，不要遗漏\n2. 数学公式用 $...$ 包裹的 LaTeX，普通文字不要放进 $...$\n3. 不要添加答案、解析或解释\n3.1 【必须完整】从页面最顶部开始逐行识别，按原顺序输出，任何一行都不能跳过；特别注意题号（如 1.）后面的整段描述文字，不要只识别小问 a/b/c，也不要漏掉说明、条件、图表标题、单位\n3.2 图片是试卷照片，正文文字较小，请逐字仔细阅读，不要只读页眉和标题\n4. 保留原题的换行和版式\n5. 方程组用 LaTeX cases 多行环境（每行一个方程）\n6. 不要使用 Markdown 符号\nhasImage 含义：这道题是否包含必须看图才能作答的内容（几何图、函数图像、坐标图、表格、实验装置图等）；纯文字题 hasImage 为 false。\n只输出 JSON，不要输出其它内容。";
+  const PROMPT = "请识别这张图片中的题目文字，并以 JSON 返回：{\"text\":\"题目文字\",\"hasImage\":true 或 false}\ntext 要求：\n1. 保留题号、选项、单位、数字，不要遗漏\n2. 数学公式用 $...$ 包裹的 LaTeX，普通文字不要放进 $...$\n3. 不要添加答案、解析或解释\n3.05 【多题】如果这一页有多道题目，请把每一道都完整识别出来，并保留每题开头的题号（如 8. / 9. / 10.），不要只识别最显眼的一题。\n3.1 【必须完整】从页面最顶部开始逐行识别，按原顺序输出，任何一行都不能跳过；特别注意题号（如 1.）后面的整段描述文字，不要只识别小问 a/b/c，也不要漏掉说明、条件、图表标题、单位\n3.2 图片是试卷照片，正文文字较小，请逐字仔细阅读，不要只读页眉和标题\n4. 保留原题的换行和版式\n5. 方程组用 LaTeX cases 多行环境（每行一个方程）\n6. 不要使用 Markdown 符号\nhasImage 含义：这道题是否包含必须看图才能作答的内容（几何图、函数图像、坐标图、表格、实验装置图等）；纯文字题 hasImage 为 false。\n只输出 JSON，不要输出其它内容。";
 
   async function ocrOne(buf) {
     const content = [
@@ -983,10 +1025,25 @@ module.exports = async function handler(req, res) {
       if (user.role !== 'admin' && it.ownerId !== user.id) return sendJSON(res, 403, { error: '只能处理自己的题目' });
       if (!db.config.gradeKey) return sendJSON(res, 400, { error: '还没有配置 AI 密钥，请管理员到「设置」里填写' });
       try {
-        const result = await callFigureAPI(db.config, it, db.images, body.imageId);
+        const result = await callFigureAPI(db.config, it, db.images, body.imageId, body.hintText);
         return sendJSON(res, 200, result);
       } catch (err) {
         console.error('[figure]', err && err.message);
+        return sendJSON(res, 500, { error: '识别图形失败：' + (err && err.message ? err.message : err) });
+      }
+    }
+
+    // AI 找出整页所有图形
+    if (pathname === '/api/detect-figures' && method === 'POST') {
+      const body = await readJSON(req);
+      const it = db.items.filter(function (i) { return i.id === body.itemId; })[0];
+      if (!it) return sendJSON(res, 404, { error: '题目不存在' });
+      if (!db.config.gradeKey) return sendJSON(res, 400, { error: '还没有配置 AI 密钥' });
+      try {
+        const result = await callFigureListAPI(db.config, it, db.images, body.imageId);
+        return sendJSON(res, 200, result);
+      } catch (err) {
+        console.error('[figures]', err && err.message);
         return sendJSON(res, 500, { error: '识别图形失败：' + (err && err.message ? err.message : err) });
       }
     }
@@ -1181,6 +1238,17 @@ module.exports = async function handler(req, res) {
       const body = await readJSON(req);
       if (body.role === 'admin' || body.role === 'student') db.users[idx].role = body.role;
       if (typeof body.disabled === 'boolean') db.users[idx].disabled = body.disabled;
+      if (typeof body.displayName === 'string') {
+        const dn = body.displayName.trim().slice(0, 30);
+        if (dn) db.users[idx].displayName = dn;
+      }
+      if (typeof body.username === 'string') {
+        const un = body.username.trim();
+        if (!/^[A-Za-z0-9_-]{3,20}$/.test(un)) return sendJSON(res, 400, { error: '登录名需 3-20 位字母/数字/下划线' });
+        const dup = db.users.filter(function (u) { return u.id !== db.users[idx].id && u.username.toLowerCase() === un.toLowerCase(); })[0];
+        if (dup) return sendJSON(res, 400, { error: '登录名已被占用' });
+        db.users[idx].username = un;
+      }
       await writeDB(db);
       return sendJSON(res, 200, publicUser(db.users[idx]));
     }

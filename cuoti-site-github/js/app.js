@@ -458,6 +458,7 @@
   }
 
   function afterBoot() {
+    if (!state._imgRestored) { state._imgRestored = true; setTimeout(restoreMissingImages, 800); }
     rebuildFilters();
     refreshReviewCounts();
     renderCurrent();
@@ -651,7 +652,7 @@
     else if (state.tab === 'inbox') renderInbox();
     else if (state.tab === 'review') { refreshReviewCounts(); renderReviewStage(); }
     else if (state.tab === 'stats') renderStats();
-    else if (state.tab === 'settings') { loadGradeConfig(); }
+    else if (state.tab === 'settings') { loadGradeConfig(); setTimeout(renderAdminUsers, 300); }
   }
 
   // ======================= 错题列表 =======================
@@ -1268,8 +1269,10 @@
 
   function insertFieldInPart(itemId, partLabel) {
     var card = document.querySelector('article.item-card[data-id="' + itemId + '"]');
-    var box = card ? card.querySelector('.inline-answer-text[data-part="' + partLabel + '"]') : null;
-    if (!box || !box.classList.contains('rich-answer')) {
+    var box = partLabel ? (card ? card.querySelector('.inline-answer-text[data-part="' + partLabel + '"]') : null) : null;
+    if (!box && card) box = card.querySelector('.inline-answer-text.rich-answer');
+    if (!box && card) box = card.querySelector('.rich-answer');
+    if (!box) {
       var boxes = $$('.rich-answer');
       box = boxes[boxes.length - 1] || null;
     }
@@ -1661,7 +1664,11 @@
     var hasText = !!(it.question && it.question.trim());
     var thumbsId = 'thumbs-' + it.id;
     // 有图就始终显示原图（图表是题目的一部分），文字只是补充
-    var thumbsBlock = thumbsHTML(it) +
+    var __longText = String(it.question || '').length > 300;
+    var thumbsBlock = (__longText
+      ? '<div class="q-actions"><button class="link" data-action="toggle-page-image" data-id="' + esc(it.id) + '">🖼 查看原图</button></div>' +
+        '<div class="page-image hidden" id="pimg-' + esc(it.id) + '">' + thumbsHTML(it) + '</div>'
+      : thumbsHTML(it)) +
       ((hasText && (it.imageIds || []).length)
         ? '<div class="q-actions">' +
             '<button class="link" data-action="copy-question" data-id="' + esc(it.id) + '">📋 复制题目</button>' +
@@ -1714,7 +1721,7 @@
     var __hasImg = (it.imageIds || []).length > 0;
     var __split = splitStem(it.question || '');
     var __multipart = __parts.length > 0;
-    var answerInputsHTML = '<textarea class="inline-answer-text" rows="3" placeholder="在这里写答案 / 解题过程；画图题可上传手写或绘图"></textarea>';
+    var answerInputsHTML = '<div class="rich-answer inline-answer-text" contenteditable="true" data-ph="在这里写答案 / 解题过程；画图题可上传手写或绘图"></div>';
 
     function __actionRow() {
       return '<div class="inline-answer-actions part-actions">' +
@@ -1768,6 +1775,9 @@
           : '') +
         ((canEdit && state.cloud && typeof Cloud !== 'undefined' && Cloud.health && Cloud.health.autoGrade && (it.imageIds || []).length)
           ? '<button class="link" data-action="crop-figure" data-id="' + esc(it.id) + '">✂ 裁剪图形</button>'
+          : '') +
+        ((canEdit && state.cloud && typeof Cloud !== 'undefined' && Cloud.health && Cloud.health.autoGrade && ((it.ocrImageIds || []).length || (it.prevImageIds || []).length || (it.imageIds || []).length))
+          ? '<button class="link" data-action="recrop-item" data-id="' + esc(it.id) + '">🔄 重裁图形</button>'
           : '') +
         ((canEdit && (it.prevImageIds || []).length)
           ? '<button class="link" data-action="restore-image" data-id="' + esc(it.id) + '">↩ 还原原图</button>'
@@ -1951,6 +1961,8 @@
     $('#e-status').value = it.id ? statusOf(it.id) : 'new';
     $('#e-diff').value = String(it.difficulty || 2);
     $('#e-source').value = it.source || '';
+    var __pn = $('#e-pick-nums');
+    if (__pn) __pn.value = it.pickNums || '';
     $('#e-topics').value = (it.topics || []).map(topicName).join(', ');
     $('#e-question').value = it.question || '';
     $('#e-my').value = it.myAnswer || '';
@@ -2051,6 +2063,8 @@
     it.status = $('#e-status').value || 'new';
     it.difficulty = parseInt($('#e-diff').value, 10) || 2;
     it.source = $('#e-source').value.trim();
+    var __pick = $('#e-pick-nums');
+    it.pickNums = __pick ? __pick.value.trim() : '';
     it.topics = topicIds;
     it.question = question;
     it.myAnswer = $('#e-my').value.trim();
@@ -2866,6 +2880,58 @@
 
   // 识别到多道题时，拆成多条错题
   // AI 批量分类（科目 + 知识点 + 错因）
+  // 一键重新识别：重裁图形 + 重新分类（不重传）
+  function reprocessAll() {
+    if (!state.cloud || typeof Cloud === 'undefined') { toast('需要班级服务器模式', 'err'); return; }
+    if (!confirm('将对全部 ' + state.items.length + ' 道错题重新识别（重裁图形 + 重分类），可能需要几分钟。继续？')) return;
+    var list = state.items.slice();
+    var done = 0, fixedImg = 0, tagged = 0;
+    toast('开始重新识别，共 ' + list.length + ' 道…', 'ok');
+    list.reduce(function (p, it) {
+      return p.then(function () {
+        var srcId = ((it.ocrImageIds || [])[0] || (it.prevImageIds || [])[0] || (it.imageIds || [])[0]);
+        var step = Promise.resolve();
+        if (srcId) {
+          step = Cloud.detectFigure(it.id, srcId, it.question || '').then(function (res) {
+            if (res && res.found && res.box && res.box.w > 0.02 && res.box.h > 0.02) {
+              return cropImageId(srcId, res.box).then(function (newId) {
+                if (!newId) return null;
+                it.imageIds = [newId];
+                it.prevImageIds = [srcId];
+                it.updatedAt = new Date().toISOString();
+                fixedImg++;
+                return DataStore.put('items', it);
+              });
+            }
+            // 没找到真图：如果当前图是错误裁剪，清掉
+            if ((it.imageIds || []).length) {
+              it.prevImageIds = (it.prevImageIds || []).concat(it.imageIds || []);
+              it.imageIds = [];
+              it.updatedAt = new Date().toISOString();
+              return DataStore.put('items', it);
+            }
+            return null;
+          }).catch(function () { return null; });
+        }
+        return step.then(function () {
+          return Cloud.tag(it.id).then(function () { tagged++; }).catch(function () {});
+        }).then(function () {
+          done++;
+          if (done % 3 === 0 || done === list.length) {
+            toast('重新识别中 ' + done + ' / ' + list.length + '（重裁 ' + fixedImg + '）', 'ok');
+          }
+        });
+      });
+    }, Promise.resolve()).then(function () {
+      return bootData();
+    }).then(function () {
+      renderCurrent();
+      toast('完成：' + done + ' 道，重裁 ' + fixedImg + ' 张图，更新分类 ' + tagged + ' 道', 'ok');
+    }).catch(function (e) {
+      toast('处理中断：' + (e && e.message ? e.message : e), 'err');
+    });
+  }
+
   function classifyAllItems() {
     if (!state.cloud || typeof Cloud === 'undefined') { toast('需要班级服务器模式', 'err'); return; }
     var todo = state.items.slice();
@@ -2892,6 +2958,107 @@
   }
 
   // ---------- 导入选题 ----------
+  // 按表单题号自动导入（留空=全部）
+  function autoImportQuestions(itemId, questions) {
+    var it = byId(state.items, 'id', itemId);
+    if (!it || !questions || !questions.length) return;
+    var raw = String(it.pickNums || '').trim();
+    var printed = questions.map(function (q) {
+      var m = String(q || '').match(/^\s*(\d{1,2})\s*[.)、]/);
+      return m ? parseInt(m[1], 10) : null;
+    });
+    var idxs = [];
+    if (!raw) {
+      for (var i = 0; i < questions.length; i++) idxs.push(i);
+    } else {
+      raw.split(/[,，\s]+/).forEach(function (x) {
+        var num = parseInt(x, 10);
+        if (isNaN(num)) return;
+        var idx = printed.indexOf(num);
+        if (idx < 0) idx = Math.min(questions.length, Math.max(1, num)) - 1;
+        if (idx >= 0 && idxs.indexOf(idx) < 0) idxs.push(idx);
+      });
+      if (!idxs.length) { for (var j = 0; j < questions.length; j++) idxs.push(j); }
+    }
+
+    var pageImgId = (it.imageIds || [])[0] || null;
+    it.question = questions[idxs[0]] || it.question;
+    it.status = it.status || 'new';
+    it.updatedAt = new Date().toISOString();
+    it.imageIds = [];
+    it.prevImageIds = pageImgId ? [pageImgId] : [];
+    var targets = [{ item: it, qText: questions[idxs[0]] }];
+
+    var chain = DataStore.put('items', it);
+    idxs.slice(1).forEach(function (k) {
+      var copy = {
+        id: uid(), subject: it.subject, date: it.date, difficulty: it.difficulty,
+        source: it.source, topics: [], causes: [], question: questions[k], imageIds: [],
+        prevImageIds: pageImgId ? [pageImgId] : [], status: 'new',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      };
+      targets.push({ item: copy, qText: questions[k] });
+      chain = chain.then(function () { return DataStore.put('items', copy); });
+    });
+
+    // 先让 AI 找出整页所有图形，再按题目顺序分配并裁剪
+    chain = chain.then(function () {
+      if (!pageImgId) return null;
+      return Cloud.detectFigures(it.id, pageImgId).then(function (res) {
+        var boxes = (res && res.boxes) || [];
+        // 哪些题需要图：题干里提到图/表/曲线，或 OCR 给了图像描述占位
+        var need = targets.filter(function (t) {
+          return /diagram|figure|graph|table|chart|curve|shown|below|above|\[.*(diagram|graph|chart|figure)/i.test(String(t.qText || ''));
+        });
+        if (!need.length) need = targets.slice();
+        var seq = Promise.resolve();
+        need.forEach(function (t, i) {
+          var box = boxes[i];
+          seq = seq.then(function () {
+            if (box) {
+              return cropImageId(pageImgId, box).then(function (newId) {
+                if (!newId) return null;
+                t.item.imageIds = [newId];
+                t.item.updatedAt = new Date().toISOString();
+                return DataStore.put('items', t.item);
+              });
+            }
+            // 没有框：退化为按题干定位一次
+            return Cloud.detectFigure(t.item.id, pageImgId, t.qText).then(function (r2) {
+              if (!r2 || !r2.found || !r2.box || r2.box.w < 0.02) return null;
+              return cropImageId(pageImgId, r2.box).then(function (id2) {
+                if (!id2) return null;
+                t.item.imageIds = [id2];
+                t.item.updatedAt = new Date().toISOString();
+                return DataStore.put('items', t.item);
+              });
+            }).catch(function () { return null; });
+          });
+        });
+        return seq.then(function () {
+          // 有图但最终没贴上 → 回退整页图，保证图不丢
+          var fix = targets.filter(function (t) {
+            return !(t.item.imageIds || []).length &&
+              /diagram|figure|graph|table|chart|curve|shown below|\[图\]|如图|图中/i.test(String(t.qText || ''));
+          });
+          return fix.reduce(function (p3, t) {
+            return p3.then(function () {
+              t.item.imageIds = [pageImgId];
+              t.item.updatedAt = new Date().toISOString();
+              return DataStore.put('items', t.item);
+            });
+          }, Promise.resolve());
+        });
+      }).catch(function () { return null; });
+    });
+
+    chain.then(function () { return bootData(); }).then(function () {
+      renderCurrent();
+      var nums = printed.map(function (x, i) { return x != null ? x : ('#' + (i + 1)); }).join('、');
+      toast('识别到 ' + questions.length + ' 道大题（题号 ' + nums + '），已导入 ' + idxs.length + ' 道并裁剪对应图形', 'ok');
+    }).catch(function (e) { toast('导入失败：' + (e && e.message ? e.message : e), 'err'); });
+  }
+
   function openPickModal(itemId, questions) {
     state.pick = { itemId: itemId, questions: questions, selected: questions.map(function (_, i) { return i; }) };
     var box = $('#pick-list');
@@ -2903,7 +3070,8 @@
       }).join('');
     }
     var inp = $('#pick-nums');
-    if (inp) inp.value = '';
+    var itPick = byId(state.items, 'id', itemId);
+    if (inp) inp.value = (itPick && itPick.pickNums) ? itPick.pickNums : '';
     showModal('modal-pick');
   }
 
@@ -3018,7 +3186,7 @@
     Cloud.transcribe(itemId).then(function (res) {
       return bootData().then(function () {
         if (res && Array.isArray(res.questions) && res.questions.length > 1) {
-          openPickModal(itemId, res.questions);
+          autoImportQuestions(itemId, res.questions);
           return;
         }
         if (res && res.keptOld) {
@@ -3070,6 +3238,35 @@
       renderCurrent();
     }).catch(function (e) {
       toast('批改失败：' + (e && e.message ? e.message : e), 'err');
+    });
+  }
+
+  // ---------- 账号管理 ----------
+  function renderAdminUsers() {
+    if (!state.cloud || !state.me || state.me.role !== 'admin') return;
+    var box = $('#admin-user-list');
+    var st = $('#admin-users-status');
+    if (!box) return;
+    if (st) st.textContent = '加载中…';
+    Cloud.listUsers().then(function (users) {
+      var list = users || [];
+      if (st) st.textContent = '共 ' + list.length + ' 个账号';
+      box.innerHTML = '<table class="admin-users"><thead><tr><th>用户名</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead><tbody>' +
+        list.map(function (u) {
+          var created = u.createdAt ? String(u.createdAt).slice(0, 10) : '-';
+          return '<tr><td>' + esc(u.displayName || u.username) + (u.displayName && u.displayName !== u.username ? '<span class="muted"> (' + esc(u.username) + ')</span>' : '') + '</td>' +
+            '<td>' + (u.role === 'admin' ? '管理员' : '学生') + '</td>' +
+            '<td>' + (u.disabled ? '<span class="badge cause">已停用</span>' : '<span class="badge topic">正常</span>') + '</td>' +
+            '<td>' + esc(created) + '</td>' +
+            '<td class="admin-user-ops">' +
+              '<button class="link" data-action="admin-user-rename" data-id="' + esc(u.id) + '" data-name="' + esc(u.displayName || '') + '">改名</button>' +
+              '<button class="link" data-action="admin-user-rename-login" data-id="' + esc(u.id) + '" data-username="' + esc(u.username || '') + '">改登录名</button>' +
+              '<button class="link" data-action="admin-user-role" data-id="' + esc(u.id) + '" data-role="' + (u.role === 'admin' ? 'student' : 'admin') + '">' + (u.role === 'admin' ? '取消管理员' : '设为管理员') + '</button>' +
+              '<button class="link ' + (u.disabled ? '' : 'danger') + '" data-action="admin-user-toggle" data-id="' + esc(u.id) + '" data-disabled="' + (u.disabled ? '0' : '1') + '">' + (u.disabled ? '启用' : '停用') + '</button>' +
+            '</td></tr>';
+        }).join('') + '</tbody></table>';
+    }).catch(function (e) {
+      if (st) st.textContent = '加载失败：' + (e && e.message ? e.message : e);
     });
   }
 
@@ -3760,6 +3957,41 @@
       if (action === 'pick-import') { importPickedQuestions(); return; }
       if (action === 'pick-all') { $$('#pick-list input[data-pick-i]').forEach(function (b) { b.checked = true; }); var pi = $('#pick-nums'); if (pi) pi.value = ''; return; }
       if (action === 'pick-none') { $$('#pick-list input[data-pick-i]').forEach(function (b) { b.checked = false; }); return; }
+      if (action === 'toggle-page-image') {
+        var imgBox = document.getElementById('pimg-' + id);
+        if (imgBox) {
+          imgBox.classList.toggle('hidden');
+          el.textContent = imgBox.classList.contains('hidden') ? '🖼 查看原图' : '🖼 收起原图';
+        }
+        return;
+      }
+      if (action === 'admin-users-refresh') { renderAdminUsers(); return; }
+      if (action === 'admin-user-rename') {
+        var oldName = el.getAttribute('data-name') || '';
+        var newName = prompt('新的显示名（1-30 字）：', oldName);
+        if (newName == null) return;
+        newName = newName.trim();
+        if (!newName) { toast('名字不能为空', 'err'); return; }
+        Cloud.updateUser(id, { displayName: newName }).then(function () { renderAdminUsers(); toast('已改名', 'ok'); }).catch(function (e) { toast('失败：' + (e && e.message ? e.message : e), 'err'); });
+        return;
+      }
+      if (action === 'admin-user-rename-login') {
+        var oldUser = el.getAttribute('data-username') || '';
+        var newUser = prompt('新的登录名（3-20 位字母/数字/下划线）：', oldUser);
+        if (newUser == null) return;
+        newUser = newUser.trim();
+        if (!newUser) return;
+        Cloud.updateUser(id, { username: newUser }).then(function () { renderAdminUsers(); toast('登录名已修改', 'ok'); }).catch(function (e) { toast('失败：' + (e && e.message ? e.message : e), 'err'); });
+        return;
+      }
+      if (action === 'admin-user-role') {
+        Cloud.updateUser(id, { role: el.getAttribute('data-role') }).then(function () { renderAdminUsers(); toast('已更新角色', 'ok'); }).catch(function (e) { toast('失败：' + (e && e.message ? e.message : e), 'err'); });
+        return;
+      }
+      if (action === 'admin-user-toggle') {
+        Cloud.updateUser(id, { disabled: el.getAttribute('data-disabled') === '1' }).then(function () { renderAdminUsers(); toast('已更新状态', 'ok'); }).catch(function (e) { toast('失败：' + (e && e.message ? e.message : e), 'err'); });
+        return;
+      }
       if (action === 'toggle-card') {
         state.expanded = state.expanded || {};
         var cardEl = el.closest('article.item-card');
@@ -3771,7 +4003,9 @@
       }
       if (action === 'toggle-mastered') { toggleMastered(id); return; }
       if (action === 'open-formula') {
-        insertFieldInPart(id, el.getAttribute('data-part') || null);
+        if (!insertFieldInPart(id, el.getAttribute('data-part') || null)) {
+          toast('先点「作答」打开答题框，再插入公式', 'err');
+        }
         return;
       }
       if (action === 'part-formula') {
@@ -3843,6 +4077,35 @@
         return;
       }
       if (action === 'tag-item') { tagItem(id); return; }
+      if (action === 'recrop-item') {
+        var rIt = byId(state.items, 'id', id);
+        if (!rIt) return;
+        var srcId = ((rIt.ocrImageIds || [])[0] || (rIt.prevImageIds || [])[0] || (rIt.imageIds || [])[0]);
+        if (!srcId) { toast('找不到原始照片，无法重裁', 'err'); return; }
+        toast('正在按新规则重新裁剪图形…', 'ok');
+        Cloud.detectFigure(rIt.id, srcId, rIt.question || '').then(function (res) {
+          if (!res || !res.found || !res.box || res.box.w < 0.02 || res.box.h < 0.02) {
+            // 没找到真图 → 清掉错误图片，保留原始照片备份
+            rIt.prevImageIds = (rIt.imageIds || []).slice();
+            rIt.imageIds = [];
+            rIt.updatedAt = new Date().toISOString();
+            return DataStore.put('items', rIt).then(function () {
+              return bootData();
+            }).then(function () { renderCurrent(); toast('没找到真正的图形，已移除错误图片', 'ok'); });
+          }
+          return cropImageId(srcId, res.box).then(function (newId) {
+            if (!newId) throw new Error('裁剪失败');
+            rIt.prevImageIds = (rIt.imageIds || []).concat([srcId]);
+            rIt.imageIds = [newId];
+            rIt.updatedAt = new Date().toISOString();
+            return DataStore.put('items', rIt).then(function () { return bootData(); }).then(function () {
+              renderCurrent();
+              toast('已重新裁剪图形', 'ok');
+            });
+          });
+        }).catch(function (e) { toast('重裁失败：' + (e && e.message ? e.message : e), 'err'); });
+        return;
+      }
       if (action === 'crop-figure') { autoCropFigure(id); return; }
       if (action === 'restore-image') { restoreImage(id); return; }
       if (action === 'toggle-group') { state.groupMode = !state.groupMode; renderItems(); return; }
@@ -3856,6 +4119,7 @@
         el.textContent = nowHidden ? '🖼 查看原图' : '🙈 隐藏原图';
         return;
       }
+      if (action === 'reprocess-all') { reprocessAll(); return; }
       if (action === 'classify-all') { classifyAllItems(); return; }
       if (action === 'save-grade-config') {
         var cfg = {
